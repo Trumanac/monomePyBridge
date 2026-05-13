@@ -25,6 +25,8 @@ from typing import Callable, Optional
 from .. import config as cfg_mod
 from ..bridge import Device, build_device
 from ..bridge.factory import build_device as _build_device  # noqa: F401  (re-export safety)
+from ..bridges.midi_bridge import MidiBridge
+from ..bridges.ws_bridge import WebSocketBridge
 from ..discovery import DeviceScanner, DiscoveredPort
 from .device_server import DeviceOscServer
 from .discovery_server import AdvertisedDevice, DiscoveryServer
@@ -38,6 +40,8 @@ class _Slot:
     device: Device
     server: DeviceOscServer
     profile: cfg_mod.DeviceProfile
+    midi: Optional[MidiBridge] = None
+    ws: Optional[WebSocketBridge] = None
 
 
 # Optional listener so the GUI can refresh its device list.
@@ -71,6 +75,23 @@ class BridgeManager:
                                     on_removed=self._on_port_removed)
         self._scanner.start()
         log.info("BridgeManager started.")
+        self._auto_attach_persistent_virtuals()
+
+    def _auto_attach_persistent_virtuals(self) -> None:
+        """Re-create any virtual grids the user marked persistent."""
+        for serial, prof in list(self.profiles.profiles.items()):
+            if not getattr(prof, "virtual", False):
+                continue
+            if serial in self._slots:
+                continue
+            try:
+                self.attach_virtual_grid(
+                    serial_id=serial,
+                    width=prof.virtual_width or 8,
+                    height=prof.virtual_height or 8,
+                )
+            except Exception:
+                log.exception("auto-attach virtual %s failed", serial)
 
     def stop(self) -> None:
         log.info("BridgeManager stopping.")
@@ -82,6 +103,7 @@ class BridgeManager:
             slots = list(self._slots.values())
             self._slots.clear()
         for slot in slots:
+            self._stop_optional_bridges(slot)
             try:
                 slot.server.stop()
             finally:
@@ -169,6 +191,7 @@ class BridgeManager:
         slot = _Slot(port=port, device=device, server=server, profile=profile)
         with self._slots_lock:
             self._slots[port.stable_id] = slot
+        self._apply_optional_bridges(slot)
         log.info("attached %s on listen=%d, dest=%s:%d, prefix=%s",
                  device.id, server.listen_port, server.host, server.app_port, server.prefix)
         if self._discovery is not None:
@@ -180,6 +203,7 @@ class BridgeManager:
             slot = self._slots.pop(stable_id, None)
         if slot is None:
             return
+        self._stop_optional_bridges(slot)
         try:
             slot.server.stop()
         finally:
@@ -262,11 +286,89 @@ class BridgeManager:
         slot = _Slot(port=port, device=device, server=server, profile=profile)
         with self._slots_lock:
             self._slots[serial_id] = slot
+        self._apply_optional_bridges(slot)
         log.info("attached virtual grid %s on listen=%d", device.id, server.listen_port)
         if self._discovery is not None:
             self._discovery.broadcast_add(device.id)
         self._notify_listeners()
         return slot
+
+    # ── optional bridges (MIDI, WebSocket) ───────────────────────────────
+    def _apply_optional_bridges(self, slot: _Slot) -> None:
+        prof = slot.profile
+        if prof.midi_enabled and slot.midi is None:
+            try:
+                slot.midi = MidiBridge(
+                    slot.device,
+                    channel=prof.midi_channel,
+                    base_note=prof.midi_base_note,
+                )
+                slot.midi.start()
+            except Exception:
+                log.exception("MIDI bridge init failed for %s", slot.device.id)
+                slot.midi = None
+        if prof.websocket_enabled and slot.ws is None:
+            try:
+                slot.ws = WebSocketBridge(
+                    slot.device, host="0.0.0.0",
+                    port=prof.websocket_port or 0,
+                )
+                slot.ws.start()
+                if slot.ws.port and prof.websocket_port == 0:
+                    prof.websocket_port = slot.ws.port
+                    self.profiles.save()
+            except Exception:
+                log.exception("WebSocket bridge init failed for %s", slot.device.id)
+                slot.ws = None
+
+    def _stop_optional_bridges(self, slot: _Slot) -> None:
+        for attr in ("midi", "ws"):
+            obj = getattr(slot, attr, None)
+            if obj is not None:
+                try:
+                    obj.stop()
+                except Exception:
+                    log.exception("%s.stop() failed for %s", attr, slot.device.id)
+                setattr(slot, attr, None)
+
+    def set_midi_enabled(self, serial: str, enabled: bool) -> None:
+        slot = self.find_slot(serial)
+        if slot is None:
+            return
+        slot.profile.midi_enabled = bool(enabled)
+        if enabled and slot.midi is None:
+            self._apply_optional_bridges(slot)
+        elif not enabled and slot.midi is not None:
+            try:
+                slot.midi.stop()
+            finally:
+                slot.midi = None
+        self.profiles.save()
+
+    def set_websocket_enabled(self, serial: str, enabled: bool) -> None:
+        slot = self.find_slot(serial)
+        if slot is None:
+            return
+        slot.profile.websocket_enabled = bool(enabled)
+        if enabled and slot.ws is None:
+            self._apply_optional_bridges(slot)
+        elif not enabled and slot.ws is not None:
+            try:
+                slot.ws.stop()
+            finally:
+                slot.ws = None
+        self.profiles.save()
+
+    def set_persistent_virtual(self, serial: str, persistent: bool) -> None:
+        prof = self.profiles.profiles.get(serial)
+        if prof is None:
+            return
+        prof.virtual = bool(persistent)
+        slot = self.find_slot(serial)
+        if slot is not None:
+            prof.virtual_width = slot.device.width
+            prof.virtual_height = slot.device.height
+        self.profiles.save()
 
     def _provide_devices(self) -> list[AdvertisedDevice]:
         out: list[AdvertisedDevice] = []

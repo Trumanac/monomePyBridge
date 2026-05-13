@@ -67,6 +67,17 @@ class DevicePanel(QWidget):
         self._sl_intensity.setTickInterval(1)
         self._sl_intensity.setTickPosition(QSlider.TickPosition.TicksBelow)
         self._cx_tilt = QCheckBox("Enable tilt streaming")
+        self._cx_midi = QCheckBox("Enable MIDI bridge")
+        self._sp_midi_ch = QSpinBox()
+        self._sp_midi_ch.setRange(1, 16)
+        self._sp_midi_base = QSpinBox()
+        self._sp_midi_base.setRange(0, 127)
+        self._cx_ws = QCheckBox("Enable WebSocket bridge")
+        self._sp_ws_port = QSpinBox()
+        self._sp_ws_port.setRange(0, 65535)
+        self._lbl_ws_status = QLabel("")
+        self._lbl_ws_status.setStyleSheet("color: #888;")
+        self._cx_persist = QCheckBox("Persistent virtual grid (auto-attach at startup)")
 
         form.addRow("Prefix", self._ed_prefix)
         form.addRow("App host", self._ed_host)
@@ -75,6 +86,13 @@ class DevicePanel(QWidget):
         form.addRow("Rotation", self._cb_rotation)
         form.addRow("Intensity", self._sl_intensity)
         form.addRow("", self._cx_tilt)
+        form.addRow("", self._cx_midi)
+        form.addRow("MIDI channel", self._sp_midi_ch)
+        form.addRow("MIDI base note", self._sp_midi_base)
+        form.addRow("", self._cx_ws)
+        form.addRow("WebSocket port (0=auto)", self._sp_ws_port)
+        form.addRow("", self._lbl_ws_status)
+        form.addRow("", self._cx_persist)
 
         btn_row = QHBoxLayout()
         self._btn_save = QPushButton("Apply && save")
@@ -134,7 +152,9 @@ class DevicePanel(QWidget):
     def _set_enabled(self, on: bool) -> None:
         for w in (
             self._ed_prefix, self._ed_host, self._sp_app_port, self._cb_rotation,
-            self._sl_intensity, self._cx_tilt, self._btn_save, self._btn_revert,
+            self._sl_intensity, self._cx_tilt, self._cx_midi, self._sp_midi_ch,
+            self._sp_midi_base, self._cx_ws, self._sp_ws_port, self._cx_persist,
+            self._btn_save, self._btn_revert,
             self._btn_test_all_on, self._btn_test_all_off, self._btn_test_chase,
             self._grid,
         ):
@@ -179,6 +199,19 @@ class DevicePanel(QWidget):
         self._sl_intensity.setValue(p.intensity)
         self._sl_intensity.blockSignals(False)
         self._cx_tilt.setChecked(p.tilt_enabled)
+        self._cx_midi.setChecked(p.midi_enabled)
+        self._sp_midi_ch.setValue(p.midi_channel)
+        self._sp_midi_base.setValue(p.midi_base_note)
+        self._cx_ws.setChecked(p.websocket_enabled)
+        self._sp_ws_port.setValue(p.websocket_port)
+        self._cx_persist.setChecked(getattr(p, "virtual", False))
+        self._cx_persist.setVisible(
+            slot.device.info.protocol.value == "virtual"
+        )
+        ws_port = slot.ws.port if slot.ws is not None else None
+        self._lbl_ws_status.setText(
+            f"WebSocket: ws://localhost:{ws_port}" if ws_port else ""
+        )
 
     # ── editor actions ──────────────────────────────────────────────────
     def _on_save(self) -> None:
@@ -207,7 +240,19 @@ class DevicePanel(QWidget):
             slot.device.tilt_set(0, 1 if p.tilt_enabled else 0)
         except Exception:
             pass
+        # Optional bridges: persist field values + apply via the manager so
+        # the bridges actually start / stop.
+        p.midi_channel = int(self._sp_midi_ch.value())
+        p.midi_base_note = int(self._sp_midi_base.value())
+        p.websocket_port = int(self._sp_ws_port.value())
+        self._manager.set_midi_enabled(slot.device.id, bool(self._cx_midi.isChecked()))
+        self._manager.set_websocket_enabled(slot.device.id, bool(self._cx_ws.isChecked()))
+        if slot.device.info.protocol.value == "virtual":
+            self._manager.set_persistent_virtual(
+                slot.device.id, bool(self._cx_persist.isChecked())
+            )
         self._profiles.save()
+        self._refresh_form()
         self.profileSaved.emit(slot.device.id)
 
     def _on_intensity_live(self, value: int) -> None:

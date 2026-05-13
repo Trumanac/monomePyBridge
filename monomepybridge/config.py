@@ -87,7 +87,15 @@ class DeviceProfile:
     osc_listen_port: int = 0   # where we receive LED commands; 0 = auto
     tilt_enabled: bool = False
     midi_enabled: bool = False
+    midi_channel: int = 1            # 1-16
+    midi_base_note: int = 36         # C2; note = base + y * width + x
     websocket_enabled: bool = False
+    websocket_port: int = 0          # 0 = auto
+    # Persistent virtual grid: when True the manager auto-attaches a
+    # VirtualGridDevice with these dimensions at startup.
+    virtual: bool = False
+    virtual_width: int = 8
+    virtual_height: int = 8
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
