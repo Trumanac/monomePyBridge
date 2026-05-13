@@ -30,6 +30,16 @@ The original [`monomeserial`](https://github.com/monome/monomeserial) was discon
 - **WebSocket bridge** — JSON protocol for browser-based grid apps.
 - **Per-device config** persisted by serial number.
 
+## Download
+
+| Platform | Link |
+| -------- | ---- |
+| **Windows** (x64) | [MonomePyBridge-windows-amd64.zip](https://github.com/Trumanac/monomePyBridge/releases/latest/download/MonomePyBridge-windows-amd64.zip) |
+| **macOS** (Apple Silicon) | [MonomePyBridge-macos-arm64.zip](https://github.com/Trumanac/monomePyBridge/releases/latest/download/MonomePyBridge-macos-arm64.zip) |
+| **Linux** (x86-64) | [MonomePyBridge-linux-x86_64.zip](https://github.com/Trumanac/monomePyBridge/releases/latest/download/MonomePyBridge-linux-x86_64.zip) |
+
+> All releases: [github.com/Trumanac/monomePyBridge/releases](https://github.com/Trumanac/monomePyBridge/releases)
+
 ## Quickstart (end users)
 
 1. Download the latest `.zip` for your OS from [Releases](https://github.com/Trumanac/monomePyBridge/releases).
