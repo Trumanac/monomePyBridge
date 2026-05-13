@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from PySide6.QtCore import QObject
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .icons import app_icon

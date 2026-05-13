@@ -231,7 +231,6 @@ class MainWindow(QMainWindow):
 
     def _on_about(self) -> None:
         from .. import __version__
-        from PySide6.QtCore import QSize
         from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
         dlg = QDialog(self)
         dlg.setWindowTitle("About MonomePyBridge")
@@ -245,7 +244,7 @@ class MainWindow(QMainWindow):
         icon_lbl.setPixmap(pix)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         lay.addWidget(icon_lbl)
-        title_lbl = QLabel(f"<h2 style='margin:0'>MonomePyBridge</h2>")
+        title_lbl = QLabel("<h2 style='margin:0'>MonomePyBridge</h2>")
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         lay.addWidget(title_lbl)
         ver_lbl = QLabel(f"<p style='color:#888;margin:0'>Version {__version__}</p>")
