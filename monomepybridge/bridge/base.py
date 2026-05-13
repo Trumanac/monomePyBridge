@@ -12,7 +12,7 @@ support only binary on/off (e.g. 40h) threshold internally.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Optional
 

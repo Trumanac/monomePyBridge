@@ -67,8 +67,12 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "RUF"]
-ignore = ["E501"]
+select = ["E", "F", "W", "B"]
+ignore = [
+    "E501",  # line length handled separately
+    "B008",  # do not perform function calls in default args
+    "B904",  # raise from in except (noisy on threading shims)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

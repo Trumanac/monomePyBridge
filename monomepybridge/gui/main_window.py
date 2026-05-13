@@ -7,7 +7,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow,
+    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMainWindow,
     QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QStatusBar,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )

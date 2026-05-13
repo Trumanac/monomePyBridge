@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from monomepybridge.bridge import DeviceProtocol, build_device
 from monomepybridge.bridge.devices.virtual import VirtualGridDevice

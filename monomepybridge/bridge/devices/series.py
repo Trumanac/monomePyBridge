@@ -11,7 +11,7 @@ test against.
 
 from __future__ import annotations
 
-from ..base import Device, DeviceInfo, DeviceProtocol
+from ..base import Device
 
 
 class MonomeSeriesDevice(Device):

@@ -10,13 +10,12 @@ import socket
 import threading
 import time
 
-import pytest
 from pythonosc import udp_client
 from pythonosc.osc_packet import OscPacket
 
 from monomepybridge.bridge.devices.virtual import VirtualGridDevice
 from monomepybridge.osc import protocol as P
-from monomepybridge.osc.endpoint import OscEndpoint, build_osc_message
+from monomepybridge.osc.endpoint import build_osc_message
 from monomepybridge.serialosc.device_server import DeviceOscServer
 from monomepybridge.serialosc.discovery_server import (
     AdvertisedDevice,

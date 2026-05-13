@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import patch
 
 import pytest
 
 from monomepybridge import paths as paths_mod
 from monomepybridge.config import (
-    AppConfig, DeviceProfile, DeviceProfileStore,
+    AppConfig, DeviceProfileStore,
 )
 from monomepybridge.discovery.scanner import DeviceScanner
 from monomepybridge.serialosc.manager import BridgeManager
@@ -87,7 +86,7 @@ def test_bridge_manager_restart_discovery(tmp_paths):
     try:
         first = mgr._discovery
         assert first is not None
-        first_port = first._endpoint.port  # noqa: SLF001
+        _first_port = first._endpoint.port  # noqa: SLF001
         mgr.restart_discovery()
         time.sleep(0.05)
         assert mgr._discovery is not None

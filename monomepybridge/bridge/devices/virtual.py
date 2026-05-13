@@ -8,7 +8,6 @@ monome, and unit tests use it to drive the OSC layer end-to-end.
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 from ..base import Device, DeviceInfo, DeviceProtocol
 
