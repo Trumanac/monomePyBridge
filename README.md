@@ -1,7 +1,7 @@
 # MonomePyBridge
 
 [![ci](https://github.com/Trumanac/monomePyBridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Trumanac/monomePyBridge/actions/workflows/ci.yml)
-[![release](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml/badge.svg)](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml)
+[![release](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml/badge.svg?event=push)](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml)
 
 A modern, cross-platform standalone bridge for [monome](https://monome.org/) grid controllers — a drop-in replacement for the legacy `monomeserial` software, with full `serialosc` compatibility so existing Max/MSP patches (MLR, MLRV, Re:mix, Polygomé, etc.) and any serialosc-aware app work unchanged.
 
