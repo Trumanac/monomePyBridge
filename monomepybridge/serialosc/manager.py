@@ -201,6 +201,29 @@ class BridgeManager:
         with self._slots_lock:
             return self._slots.get(serial)
 
+    def forget_device(self, serial: str) -> bool:
+        """Detach a device (if attached) and remove its saved profile."""
+        self._detach(serial)
+        removed = self.profiles.remove(serial)
+        if removed:
+            self.profiles.save()
+        return removed
+
+    def restart_discovery(self) -> None:
+        """Tear down + restart the serialoscd UDP listener (after port change)."""
+        if self._discovery is not None:
+            try:
+                self._discovery.stop()
+            except Exception:
+                log.exception("discovery stop failed")
+            self._discovery = None
+        self._discovery = DiscoveryServer(
+            device_provider=self._provide_devices,
+            port=self.config.osc_serialoscd_port,
+        )
+        self._discovery.start()
+        log.info("serialoscd restarted on UDP %d", self.config.osc_serialoscd_port)
+
     def attach_virtual_grid(
         self,
         serial_id: str = "virt-0001",

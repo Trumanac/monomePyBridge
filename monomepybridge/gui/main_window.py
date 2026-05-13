@@ -4,18 +4,20 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
-    QPushButton, QSplitter, QStatusBar, QTreeWidget, QTreeWidgetItem,
-    QVBoxLayout, QWidget,
+    QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow,
+    QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QStatusBar,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..config import AppConfig, DeviceProfileStore
+from ..paths import config_dir
 from .device_panel import DevicePanel
 from .log_handler import QtLogBridge
 from .qt_bridge import QtBridge
+from .settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
@@ -48,6 +50,17 @@ class MainWindow(QMainWindow):
         # Menu
         menu = self.menuBar()
         m_file = menu.addMenu("&File")
+        act_settings = QAction("&Settings…", self)
+        act_settings.setShortcut("Ctrl+,")
+        act_settings.triggered.connect(self._on_settings)
+        m_file.addAction(act_settings)
+        act_reveal = QAction("Reveal config &folder", self)
+        act_reveal.triggered.connect(self._on_reveal_config)
+        m_file.addAction(act_reveal)
+        act_profiles = QAction("Saved &profiles…", self)
+        act_profiles.triggered.connect(self._on_show_profiles)
+        m_file.addAction(act_profiles)
+        m_file.addSeparator()
         act_quit = QAction("&Quit", self)
         act_quit.setShortcut("Ctrl+Q")
         act_quit.triggered.connect(self._on_quit)
@@ -137,6 +150,8 @@ class MainWindow(QMainWindow):
 
     def _wire_signals(self) -> None:
         self._tree.currentItemChanged.connect(self._on_selection_changed)
+        self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         self._btn_add_virt.clicked.connect(lambda: self._add_virtual(8, 8))
         self._btn_clear_log.clicked.connect(self._log_view.clear)
         self._panel.profileSaved.connect(lambda _s: self._refresh_device_list())
@@ -219,6 +234,60 @@ class MainWindow(QMainWindow):
                           "Standalone bridge for monome grid controllers.<br>"
                           "Cross-platform replacement / superset of monomeserial.")
 
+    # ── settings / config folder ────────────────────────────────────────
+    def _on_settings(self) -> None:
+        old_port = self._config.osc_serialoscd_port
+        dlg = SettingsDialog(self._config, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        dlg.apply_to_config()
+        if self._config.osc_serialoscd_port != old_port:
+            try:
+                self._bridge.manager.restart_discovery()
+            except Exception as e:  # pragma: no cover
+                QMessageBox.warning(
+                    self, "serialoscd port",
+                    f"Failed to bind UDP {self._config.osc_serialoscd_port}: {e}\n\n"
+                    f"The previous listener is no longer running. Reopen Settings "
+                    f"and pick a different port, then save again.",
+                )
+        self._update_status()
+
+    def _on_reveal_config(self) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(config_dir())))
+
+    # ── saved profiles browser ──────────────────────────────────────────
+    def _on_show_profiles(self) -> None:
+        dlg = _ProfilesDialog(self._bridge, self._profiles, parent=self)
+        dlg.exec()
+        # If anything was forgotten the device list may need refresh.
+        self._refresh_device_list()
+
+    # ── tree context menu ───────────────────────────────────────────────
+    def _on_tree_context_menu(self, pos) -> None:
+        item = self._tree.itemAt(pos)
+        if item is None:
+            return
+        serial = item.data(0, Qt.ItemDataRole.UserRole)
+        if not serial:
+            return
+        menu = QMenu(self)
+        act_forget = menu.addAction("Detach && forget profile")
+        chosen = menu.exec(self._tree.viewport().mapToGlobal(pos))
+        if chosen is act_forget:
+            self._forget_serial(serial)
+
+    def _forget_serial(self, serial: str) -> None:
+        ok = QMessageBox.question(
+            self, "Forget device",
+            f"Detach <b>{serial}</b> and erase its saved profile?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if ok != QMessageBox.StandardButton.Yes:
+            return
+        self._bridge.manager.forget_device(serial)
+        self._refresh_device_list()
+
     def _update_status(self) -> None:
         n = len(self._bridge.slots())
         self.statusBar().showMessage(
@@ -242,3 +311,78 @@ class MainWindow(QMainWindow):
         self.hide()
         QTimer.singleShot(0, lambda: self.statusBar().showMessage(
             "Minimized to tray. Right-click the tray icon to quit.", 4000))
+
+
+class _ProfilesDialog(QDialog):
+    """Browse + manage saved per-device profiles (attached or not)."""
+
+    def __init__(
+        self,
+        bridge: QtBridge,
+        profiles: DeviceProfileStore,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Saved device profiles")
+        self.resize(620, 360)
+        self._bridge = bridge
+        self._profiles = profiles
+        self._build()
+        self._refresh()
+
+    def _build(self) -> None:
+        v = QVBoxLayout(self)
+        self._tree = QTreeWidget()
+        self._tree.setColumnCount(5)
+        self._tree.setHeaderLabels(
+            ["Serial", "Status", "Prefix", "→ App", "Listen"]
+        )
+        self._tree.setRootIsDecorated(False)
+        v.addWidget(self._tree, 1)
+
+        row = QHBoxLayout()
+        self._btn_forget = QPushButton("Forget selected")
+        self._btn_forget.clicked.connect(self._forget_selected)
+        row.addWidget(self._btn_forget)
+        row.addStretch(1)
+        v.addLayout(row)
+
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(self.reject)
+        btns.accepted.connect(self.accept)
+        # The Close button maps to "rejected" by default; treat it as accept too.
+        for b in btns.buttons():
+            b.clicked.connect(self.accept)
+        v.addWidget(btns)
+
+    def _refresh(self) -> None:
+        self._tree.clear()
+        attached = {s.device.id: s for s in self._bridge.slots()}
+        for serial, prof in sorted(self._profiles.profiles.items()):
+            slot = attached.get(serial)
+            status = "attached" if slot else "saved"
+            listen = str(slot.server.listen_port) if slot else (
+                str(prof.osc_listen_port) if prof.osc_listen_port else "—"
+            )
+            it = QTreeWidgetItem([
+                serial, status, prof.prefix,
+                f"{prof.osc_host}:{prof.osc_app_port}", listen,
+            ])
+            it.setData(0, Qt.ItemDataRole.UserRole, serial)
+            self._tree.addTopLevelItem(it)
+
+    def _forget_selected(self) -> None:
+        item = self._tree.currentItem()
+        if item is None:
+            return
+        serial = item.data(0, Qt.ItemDataRole.UserRole)
+        ok = QMessageBox.question(
+            self, "Forget profile",
+            f"Detach <b>{serial}</b> (if attached) and erase its saved profile?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if ok != QMessageBox.StandardButton.Yes:
+            return
+        self._bridge.manager.forget_device(serial)
+        self._refresh()
+

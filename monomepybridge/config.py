@@ -121,3 +121,10 @@ class DeviceProfileStore:
         if serial not in self.profiles:
             self.profiles[serial] = DeviceProfile(serial=serial)
         return self.profiles[serial]
+
+    def remove(self, serial: str) -> bool:
+        """Forget the saved profile for ``serial``. Returns True if it existed."""
+        if serial in self.profiles:
+            del self.profiles[serial]
+            return True
+        return False
