@@ -133,8 +133,8 @@ if _is_macos:
         info_plist={
             "CFBundleName": "MonomePyBridge",
             "CFBundleDisplayName": "MonomePyBridge",
-            "CFBundleShortVersionString": "0.1.0",
-            "CFBundleVersion": "0.1.0",
+            "CFBundleShortVersionString": "0.6.9.0",
+            "CFBundleVersion": "0.6.9.0",
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "10.15",
             "NSMicrophoneUsageDescription": "Not used.",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monomepybridge"
-version = "0.1.0"
+version = "0.6.9.0"
 description = "A modern, cross-platform standalone bridge for monome grid controllers (40h, series, mext) — a drop-in replacement for legacy monomeserial with serialosc-compatible OSC."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
