@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
         self._profiles = profiles
         self._log_bridge = log_bridge
         self._allow_close = False
+        self._has_tray = False  # set by app.py after tray is created
 
         self._build_ui()
         self._wire_signals()
@@ -328,14 +329,20 @@ class MainWindow(QMainWindow):
 
     # ── close → minimize to tray ────────────────────────────────────────
     def request_quit(self) -> None:
+        """Signal the whole application to exit cleanly."""
         self._allow_close = True
         self.close()
+        from PySide6.QtWidgets import QApplication
+        qapp = QApplication.instance()
+        if qapp is not None:
+            qapp.quit()
 
     def _on_quit(self) -> None:
         self.request_quit()
 
     def closeEvent(self, ev: QCloseEvent) -> None:
-        if self._allow_close or not self._config.minimize_to_tray:
+        minimize = self._config.minimize_to_tray and self._has_tray
+        if self._allow_close or not minimize:
             ev.accept()
             return
         ev.ignore()

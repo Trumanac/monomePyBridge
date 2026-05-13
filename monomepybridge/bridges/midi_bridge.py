@@ -130,10 +130,6 @@ class MidiBridge:
                     inst.close_port()
                 except Exception:
                     pass
-                try:
-                    del inst
-                except Exception:
-                    pass
                 setattr(self, attr, None)
 
     # ── device → MIDI out ────────────────────────────────────────────────

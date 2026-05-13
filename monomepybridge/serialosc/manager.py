@@ -24,7 +24,6 @@ from typing import Callable, Optional
 
 from .. import config as cfg_mod
 from ..bridge import Device, build_device
-from ..bridge.factory import build_device as _build_device  # noqa: F401  (re-export safety)
 from ..bridges.midi_bridge import MidiBridge
 from ..bridges.ws_bridge import WebSocketBridge
 from ..discovery import DeviceScanner, DiscoveredPort
@@ -61,7 +60,6 @@ class BridgeManager:
         self._slots: dict[str, _Slot] = {}      # keyed by stable_id
         self._slots_lock = threading.RLock()
         self._discovery: Optional[DiscoveryServer] = None
-        self._next_port_hint = self.config.osc_device_base_port
         self._listeners: list[ManagerListener] = []
 
     # ── lifecycle ────────────────────────────────────────────────────────

@@ -47,11 +47,11 @@ def run_gui(
             win.activateWindow()
 
         def _quit() -> None:
-            win.request_quit()
-            qapp.quit()
+            win.request_quit()  # also calls qapp.quit() internally
 
         tray = TrayIcon(on_show=_show, on_quit=_quit)
         tray.show()
+        win._has_tray = True  # noqa: SLF001
 
     if not config.start_minimized:
         win.show()
@@ -71,9 +71,10 @@ def run_gui(
     qapp.aboutToQuit.connect(_shutdown)
 
     # Periodically refresh status / device-list metadata (cheap).
-    refresh = QTimer()
-    refresh.setInterval(2000)
-    refresh.timeout.connect(lambda: win._update_status())  # noqa: SLF001
-    refresh.start()
+    # Stored on qapp so it isn't garbage-collected before the event loop exits.
+    qapp._refresh_timer = QTimer()  # noqa: SLF001
+    qapp._refresh_timer.setInterval(2000)  # noqa: SLF001
+    qapp._refresh_timer.timeout.connect(lambda: win._update_status())  # noqa: SLF001
+    qapp._refresh_timer.start()  # noqa: SLF001
 
     return qapp.exec()
