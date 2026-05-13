@@ -197,6 +197,54 @@ class BridgeManager:
         with self._slots_lock:
             return list(self._slots.values())
 
+    def find_slot(self, serial: str) -> Optional[_Slot]:
+        with self._slots_lock:
+            return self._slots.get(serial)
+
+    def attach_virtual_grid(
+        self,
+        serial_id: str = "virt-0001",
+        width: int = 8,
+        height: int = 8,
+    ) -> _Slot:
+        """Inject an in-process :class:`VirtualGridDevice` (used by the GUI)."""
+        from ..bridge.devices.virtual import VirtualGridDevice
+        from ..discovery.scanner import (
+            DiscoveredPort, GuessedProtocol, MatchTier,
+        )
+        device = VirtualGridDevice(serial_id=serial_id, width=width, height=height)
+        device.start()
+
+        profile = self.profiles.get_or_create(device.id)
+        server = DeviceOscServer(
+            device,
+            prefix=profile.prefix,
+            host=profile.osc_host,
+            app_port=profile.osc_app_port,
+            listen_port=profile.osc_listen_port or 0,
+        )
+        server.start()
+        if profile.osc_listen_port == 0:
+            profile.osc_listen_port = server.listen_port
+            self.profiles.save()
+
+        port = DiscoveredPort(
+            device="virtual",
+            serial_number=serial_id,
+            description=device.info.type_name,
+            manufacturer="MonomePyBridge",
+            tier=MatchTier.MATCH_UNKNOWN,
+            guessed_protocol=GuessedProtocol.PROTO_UNKNOWN,
+        )
+        slot = _Slot(port=port, device=device, server=server, profile=profile)
+        with self._slots_lock:
+            self._slots[serial_id] = slot
+        log.info("attached virtual grid %s on listen=%d", device.id, server.listen_port)
+        if self._discovery is not None:
+            self._discovery.broadcast_add(device.id)
+        self._notify_listeners()
+        return slot
+
     def _provide_devices(self) -> list[AdvertisedDevice]:
         out: list[AdvertisedDevice] = []
         with self._slots_lock:

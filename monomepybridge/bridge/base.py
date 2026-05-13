@@ -91,6 +91,7 @@ class Device(ABC):
     def __init__(self, info: DeviceInfo) -> None:
         self.info = info
         self._cb = DeviceCallbacks()
+        self._observers: list[DeviceCallbacks] = []
 
     # ── identity passthroughs ────────────────────────────────────────────
     @property
@@ -156,18 +157,46 @@ class Device(ABC):
     def set_callbacks(self, callbacks: DeviceCallbacks) -> None:
         self._cb = callbacks
 
+    def add_observer(self, callbacks: DeviceCallbacks) -> None:
+        """Add an extra :class:`DeviceCallbacks` fan-out (e.g. the GUI)."""
+        self._observers.append(callbacks)
+
+    def remove_observer(self, callbacks: DeviceCallbacks) -> None:
+        try:
+            self._observers.remove(callbacks)
+        except ValueError:
+            pass
+
     # Internal helpers for drivers to fire events safely.
     def _fire_key(self, x: int, y: int, state: int) -> None:
         cb = self._cb.on_key
         if cb is not None:
             cb(x, y, state)
+        for obs in list(self._observers):
+            if obs.on_key is not None:
+                try:
+                    obs.on_key(x, y, state)
+                except Exception:
+                    pass
 
     def _fire_tilt(self, n: int, x: int, y: int, z: int) -> None:
         cb = self._cb.on_tilt
         if cb is not None:
             cb(n, x, y, z)
+        for obs in list(self._observers):
+            if obs.on_tilt is not None:
+                try:
+                    obs.on_tilt(n, x, y, z)
+                except Exception:
+                    pass
 
     def _fire_disconnect(self) -> None:
         cb = self._cb.on_disconnect
         if cb is not None:
             cb()
+        for obs in list(self._observers):
+            if obs.on_disconnect is not None:
+                try:
+                    obs.on_disconnect()
+                except Exception:
+                    pass

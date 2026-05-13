@@ -1,8 +1,7 @@
 """Application bootstrap.
 
-Phase 2: starts the BridgeManager (serialosc discovery + per-device OSC
-servers) and runs until interrupted. Phase 3 will replace the wait loop
-with the Qt event loop.
+Phase 3: launches the PySide6 GUI by default. ``--no-gui`` keeps the
+old headless daemon behaviour for servers / CI / scripted use.
 """
 
 from __future__ import annotations
@@ -26,9 +25,11 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
         description="Standalone bridge for monome grid controllers (40h kit + serialosc-compatible).",
     )
     p.add_argument("--no-gui", action="store_true",
-                   help="Run headless (no Qt GUI). Default for now.")
+                   help="Run headless (no Qt GUI).")
     p.add_argument("--once", action="store_true",
-                   help="Start the bridge, list devices once, then exit.")
+                   help="Start the bridge, list devices once, then exit (implies --no-gui).")
+    p.add_argument("--virtual", action="store_true",
+                   help="Inject an 8x8 virtual grid at startup (handy with no hardware).")
     p.add_argument("--log-level", default=None,
                    help="DEBUG / INFO / WARNING / ERROR (overrides config).")
     return p.parse_args(list(argv[1:]))
@@ -48,6 +49,12 @@ def run_app(argv: Sequence[str]) -> int:
     manager.start()
     log.info("serialoscd advertised on UDP %d", cfg.osc_serialoscd_port)
 
+    if args.virtual:
+        try:
+            manager.attach_virtual_grid()
+        except Exception:
+            log.exception("attach_virtual_grid failed")
+
     if args.once:
         time.sleep(0.5)
         slots = manager.list_slots()
@@ -63,6 +70,23 @@ def run_app(argv: Sequence[str]) -> int:
         manager.stop()
         return 0
 
+    if not args.no_gui:
+        try:
+            from .gui import run_gui
+        except ImportError as e:
+            log.error("PySide6 not available (%s) — falling back to headless mode.", e)
+        else:
+            try:
+                return run_gui(manager, cfg, profiles, argv=list(argv))
+            finally:
+                # run_gui's aboutToQuit hook stops the manager; this is a
+                # belt-and-braces guard if Qt exits abnormally.
+                try:
+                    manager.stop()
+                except Exception:
+                    pass
+
+    # Headless path
     stop_evt = threading.Event()
 
     def _on_signal(signum, _frame):
@@ -77,10 +101,11 @@ def run_app(argv: Sequence[str]) -> int:
             except (ValueError, OSError):
                 pass
 
-    log.info("Running. Press Ctrl+C to stop.")
+    log.info("Running headless. Press Ctrl+C to stop.")
     try:
         while not stop_evt.is_set():
             stop_evt.wait(timeout=1.0)
     finally:
         manager.stop()
     return 0
+

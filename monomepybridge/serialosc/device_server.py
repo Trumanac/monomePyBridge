@@ -277,3 +277,13 @@ class DeviceOscServer:
             self.host = host
         if port is not None:
             self.app_port = int(port)
+
+    def set_prefix(self, prefix: str) -> None:
+        new = P.normalize_prefix(prefix)
+        if new == self.prefix:
+            return
+        old = self.prefix
+        self.prefix = new
+        self._endpoint.unregister_prefix(old)
+        self._endpoint.register_prefix(self.prefix, self._h_prefix_dispatch)
+        log.info("[%s] prefix %s -> %s (gui)", self.device.id, old, self.prefix)
