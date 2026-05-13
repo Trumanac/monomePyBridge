@@ -94,6 +94,15 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 _is_windows = sys.platform.startswith("win")
 _is_macos = sys.platform == "darwin"
 
+# Platform-specific icon paths.
+_ICONS = ROOT / "monomepybridge" / "resources"
+if _is_windows:
+    _icon = str(_ICONS / "icon.ico")
+elif _is_macos:
+    _icon = str(_ICONS / "icon.icns")
+else:
+    _icon = str(_ICONS / "icon_256.png")
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -109,7 +118,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=_icon,
 )
 
 coll = COLLECT(
@@ -128,7 +137,7 @@ if _is_macos:
     app = BUNDLE(
         coll,
         name="MonomePyBridge.app",
-        icon=None,
+        icon=_icon,
         bundle_identifier="org.trumanac.monomepybridge",
         info_plist={
             "CFBundleName": "MonomePyBridge",

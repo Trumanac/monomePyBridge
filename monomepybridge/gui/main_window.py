@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from ..config import AppConfig, DeviceProfileStore
 from ..paths import config_dir
 from .device_panel import DevicePanel
+from .icons import app_icon, app_pixmap
 from .log_handler import QtLogBridge
 from .qt_bridge import QtBridge
 from .settings_dialog import SettingsDialog
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle("MonomePyBridge")
+        self.setWindowIcon(app_icon())
         self.resize(1100, 720)
 
         self._bridge = bridge
@@ -229,10 +231,40 @@ class MainWindow(QMainWindow):
 
     def _on_about(self) -> None:
         from .. import __version__
-        QMessageBox.about(self, "About MonomePyBridge",
-                          f"<b>MonomePyBridge</b> {__version__}<br>"
-                          "Standalone bridge for monome grid controllers.<br>"
-                          "Cross-platform replacement / superset of monomeserial.")
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About MonomePyBridge")
+        dlg.setWindowIcon(app_icon())
+        dlg.setFixedSize(360, 320)
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(12)
+        lay.setContentsMargins(24, 24, 24, 16)
+        icon_lbl = QLabel()
+        pix = app_pixmap(128)
+        icon_lbl.setPixmap(pix)
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(icon_lbl)
+        title_lbl = QLabel(f"<h2 style='margin:0'>MonomePyBridge</h2>")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(title_lbl)
+        ver_lbl = QLabel(f"<p style='color:#888;margin:0'>Version {__version__}</p>")
+        ver_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(ver_lbl)
+        desc_lbl = QLabel(
+            "<p style='text-align:center'>Standalone bridge for monome grid controllers.<br>"
+            "Cross-platform replacement / superset of monomeserial.<br>"
+            "<a href='https://github.com/Trumanac/monomePyBridge'>github.com/Trumanac/monomePyBridge</a></p>"
+        )
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setOpenExternalLinks(True)
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(desc_lbl)
+        lay.addStretch(1)
+        btn = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        btn.accepted.connect(dlg.accept)
+        lay.addWidget(btn)
+        dlg.exec()
 
     # ── settings / config folder ────────────────────────────────────────
     def _on_settings(self) -> None:

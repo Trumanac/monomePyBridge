@@ -5,22 +5,10 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from PySide6.QtCore import QObject
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-
-def _make_tray_icon() -> QIcon:
-    pix = QPixmap(64, 64)
-    pix.fill(QColor(0, 0, 0, 0))
-    p = QPainter(pix)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    p.fillRect(8, 8, 48, 48, QColor(35, 35, 35))
-    for y in range(4):
-        for x in range(4):
-            p.fillRect(12 + x * 12, 12 + y * 12,
-                       8, 8, QColor(255, 140, 0))
-    p.end()
-    return QIcon(pix)
+from .icons import app_icon
 
 
 class TrayIcon(QObject):
@@ -33,7 +21,7 @@ class TrayIcon(QObject):
         super().__init__(parent)
         self._on_show = on_show
         self._on_quit = on_quit
-        self.icon = QSystemTrayIcon(_make_tray_icon(), parent)
+        self.icon = QSystemTrayIcon(app_icon(), parent)
         self.icon.setToolTip("MonomePyBridge")
         menu = QMenu()
         act_show = QAction("Show window", menu)

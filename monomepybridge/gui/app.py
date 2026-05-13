@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from ..config import AppConfig, DeviceProfileStore
 from ..serialosc.manager import BridgeManager
+from .icons import app_icon
 from .log_handler import install_qt_log_bridge
 from .main_window import MainWindow
 from .qt_bridge import QtBridge
@@ -31,6 +32,7 @@ def run_gui(
     qapp.setApplicationName("MonomePyBridge")
     qapp.setOrganizationName("Trumanac")
     qapp.setQuitOnLastWindowClosed(False)
+    qapp.setWindowIcon(app_icon())
 
     log_bridge = install_qt_log_bridge(level=logging.INFO)
     qt_bridge = QtBridge(manager)
