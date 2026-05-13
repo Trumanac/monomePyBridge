@@ -1,8 +1,17 @@
 # MonomePyBridge
 
+[![ci](https://github.com/Trumanac/monomePyBridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Trumanac/monomePyBridge/actions/workflows/ci.yml)
+[![release](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml/badge.svg)](https://github.com/Trumanac/monomePyBridge/actions/workflows/release.yml)
+
 A modern, cross-platform standalone bridge for [monome](https://monome.org/) grid controllers — a drop-in replacement for the legacy `monomeserial` software, with full `serialosc` compatibility so existing Max/MSP patches (MLR, MLRV, Re:mix, Polygomé, etc.) and any serialosc-aware app work unchanged.
 
 > **Status:** early alpha — under active development.
+
+## Documentation
+
+- [User guide](docs/USER_GUIDE.md) — install, first run, virtual grids, config files
+- [OSC / WebSocket / MIDI protocol](docs/OSC_PROTOCOL.md) — every message the bridge speaks
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — driver / firewall / loopMIDI / Gatekeeper
 
 ## Why this exists
 
@@ -48,6 +57,35 @@ py -3.11 -m venv .venv
 # source .venv/bin/activate    # macOS / Linux
 pip install -e ".[dev]"
 python -m monomepybridge
+```
+
+### Run the tests
+
+```pwsh
+$env:QT_QPA_PLATFORM = "offscreen"
+pytest tests/ -v
+python scripts/gui_smoke.py
+```
+
+### Build a standalone bundle
+
+```pwsh
+pip install -e ".[dev]"      # includes pyinstaller
+python scripts/build.py
+```
+
+Output: `dist/MonomePyBridge-<os>-<arch>.zip` plus the runnable
+`dist/MonomePyBridge/` folder (or `MonomePyBridge.app` on macOS).
+
+### Cutting a release
+
+Push a tag of the form `vX.Y.Z`. The `release` GitHub Action builds
+Windows / macOS / Linux bundles in parallel and attaches them to a new
+GitHub Release automatically.
+
+```bash
+git tag v0.1.0
+git push --tags
 ```
 
 ## License
