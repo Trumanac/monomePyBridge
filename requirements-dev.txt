@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=7.4
+pytest-asyncio>=0.23
+pytest-qt>=4.2
+pyinstaller>=6.0,<7.0
+ruff>=0.4
+mypy>=1.8

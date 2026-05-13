@@ -1,0 +1,10 @@
+# Runtime dependencies — pinned for reproducible PyInstaller builds.
+# For development, prefer `pip install -e .[dev]` which uses pyproject.toml.
+PySide6>=6.6,<6.9
+python-osc>=1.8,<2.0
+pyserial>=3.5,<4.0
+python-rtmidi>=1.5,<2.0
+websockets>=12.0,<14.0
+pystray>=0.19,<0.20
+pillow>=10.0,<12.0
+platformdirs>=4.0,<5.0
