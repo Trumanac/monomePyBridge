@@ -291,6 +291,11 @@ def test_bridge_manager_attaches_virtual_device(tmp_path, monkeypatch):
     app_cfg.osc_serialoscd_port = 0
     profiles = cfg_mod.DeviceProfileStore.load()
 
+    # Prevent the background scanner from discovering real serial ports on
+    # this machine (e.g. COM7) and racing with our manual _on_port_added call.
+    import monomepybridge.discovery.scanner as scanner_mod
+    monkeypatch.setattr(scanner_mod, "list_serial_ports", lambda **_kw: [])
+
     mgr = BridgeManager(app_config=app_cfg, profile_store=profiles)
     # Patch build_device used inside the manager module to always return
     # a fresh VirtualGridDevice — sidesteps real serial drivers.

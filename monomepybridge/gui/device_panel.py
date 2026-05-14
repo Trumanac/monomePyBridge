@@ -284,6 +284,8 @@ class DevicePanel(QWidget):
         idx = {"i": 0}
 
         def step() -> None:
+            if self._slot is not slot:
+                return  # user switched device mid-chase; abandon silently
             if idx["i"] >= len(cells):
                 self._led_all(0)
                 return

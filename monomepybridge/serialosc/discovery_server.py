@@ -83,11 +83,12 @@ class DiscoveryServer:
             log.debug("/serialosc/list: bad args from %s: %r", src, args)
             return
         target = (args[0], int(args[1]))
-        for d in self._provider():
+        devices = list(self._provider())
+        for d in devices:
             self._endpoint.send(target[0], target[1],
                                 P.SERIALOSC_DEVICE, d.id, d.type_name, d.port)
         log.debug("/serialosc/list -> %s:%d (%d devices)",
-                  target[0], target[1], len(list(self._provider())))
+                  target[0], target[1], len(devices))
 
     def _h_notify(self, addr: str, args: list, src: tuple[str, int]) -> None:
         if len(args) < 2 or not isinstance(args[0], str) or not isinstance(args[1], int):
