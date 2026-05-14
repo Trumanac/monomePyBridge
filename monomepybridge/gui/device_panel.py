@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from ..bridge.devices.virtual import VirtualGridDevice
 from ..config import DeviceProfile, DeviceProfileStore
+from ..osc.protocol import normalize_prefix
 from ..serialosc.manager import BridgeManager, _Slot
 from .grid_widget import GridWidget
 
@@ -219,7 +220,7 @@ class DevicePanel(QWidget):
         if slot is None:
             return
         p: DeviceProfile = slot.profile
-        p.prefix = self._ed_prefix.text().strip() or "/monome"
+        p.prefix = normalize_prefix(self._ed_prefix.text().strip())
         p.osc_host = self._ed_host.text().strip() or "127.0.0.1"
         p.osc_app_port = int(self._sp_app_port.value())
         p.rotation = [0, 90, 180, 270][self._cb_rotation.currentIndex()]
