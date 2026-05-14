@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MonomePyBridge WebSocket Demo</title>
+<style>
+  :root {
+    --bg: #111;
+    --panel: #1c1c1c;
+    --border: #333;
+    --amber: #ff8800;
+    --amber-dim: #7a3f00;
+    --amber-glow: #ffaa33;
+    --green: #44ff88;
+    --red: #ff3344;
+    --blue: #44aaff;
+    --text: #cccccc;
+    --text-dim: #666;
+    --cell: 34px;
+    --gap: 3px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Consolas", "Fira Mono", monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  h1 {
+    color: var(--amber);
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .subtitle { color: var(--text-dim); font-size: 11px; margin-bottom: 6px; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+
+  /* ---- connection bar ---- */
+  .conn-bar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .conn-bar label { color: var(--text-dim); }
+
+  #wsUrl {
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    color: var(--amber);
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 240px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+
+  button {
+    background: var(--amber-dim);
+    color: var(--amber-glow);
+    border: 1px solid var(--amber);
+    padding: 4px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  button:hover { background: #b06000; }
+  button.active {
+    background: var(--amber);
+    color: #111;
+    font-weight: bold;
+  }
+  button.danger { background: #500; border-color: var(--red); color: var(--red); }
+  button.danger:hover { background: #800; }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    display: inline-block;
+    margin-right: 4px;
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--green); }
+  .status-dot.connecting { animation: blink 0.6s infinite; background: var(--amber); }
+  @keyframes blink { 50% { opacity: 0.2; } }
+
+  #statusText { color: var(--text-dim); font-size: 12px; }
+  #deviceInfo { color: var(--amber-glow); font-size: 12px; }
+
+  /* ---- panels ---- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .panel h3 {
+    color: var(--amber);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+
+  /* ---- grid canvas ---- */
+  #gridCanvas {
+    cursor: crosshair;
+    image-rendering: pixelated;
+    border-radius: 4px;
+    display: block;
+  }
+
+  /* ---- mode buttons ---- */
+  .mode-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mode-btn { padding: 4px 10px; font-size: 12px; }
+
+  /* ---- speed ---- */
+  .ctrl-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ctrl-label { color: var(--text-dim); width: 80px; }
+  input[type=range] {
+    accent-color: var(--amber);
+    width: 140px;
+  }
+  .ctrl-val { color: var(--amber-glow); width: 30px; }
+
+  /* ---- tilt panel ---- */
+  #tiltDisc { border-radius: 50%; display: block; }
+  #tiltZBar {
+    width: 20px;
+    height: 140px;
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  #tiltZFill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--amber);
+    transition: height 0.05s;
+  }
+  .tilt-vals { color: var(--amber-glow); font-size: 11px; }
+
+  /* ---- tilt sim ---- */
+  .sim-row { display: flex; align-items: center; gap: 6px; }
+  .sim-label { color: var(--text-dim); width: 18px; }
+  #simX, #simY, #simZ { width: 120px; }
+
+  /* ---- log ---- */
+  #log {
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    height: 200px;
+    overflow-y: auto;
+    padding: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  #log .log-key   { color: var(--amber-glow); }
+  #log .log-tilt  { color: var(--blue); }
+  #log .log-sys   { color: var(--text-dim); }
+  #log .log-err   { color: var(--red); }
+  #log .log-hello { color: var(--green); }
+
+  /* ---- score ---- */
+  #scoreDisplay { color: var(--amber-glow); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>MonomePyBridge</h1>
+<div class="subtitle">Interactive WebSocket Device Demo — Grid + MIDI + Tilt Playground</div>
+
+<!-- CONNECTION BAR -->
+<div class="conn-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <label>ws://</label>
+  <input id="wsUrl" type="text" value="localhost:8765" placeholder="host:port">
+  <button id="btnConnect">Connect</button>
+  <button class="danger" id="btnDisconnect" disabled>Disconnect</button>
+  <span id="statusText">Disconnected</span>
+  &nbsp;|&nbsp;
+  <span id="deviceInfo">—</span>
+  &nbsp;|&nbsp;
+  <span id="scoreDisplay"></span>
+</div>
+
+<div class="row">
+  <!-- LEFT: GRID + CONTROLS -->
+  <div class="col">
+    <!-- Mode selector -->
+    <div class="panel">
+      <h3>Mode</h3>
+      <div class="mode-btns">
+        <button class="mode-btn active" data-mode="ripple">Ripple</button>
+        <button class="mode-btn" data-mode="rain">Matrix Rain</button>
+        <button class="mode-btn" data-mode="snake">Snake</button>
+        <button class="mode-btn" data-mode="spiral">Spiral</button>
+        <button class="mode-btn" data-mode="direct">Direct</button>
+      </div>
+      <br>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Speed</span>
+        <input type="range" id="speedSlider" min="1" max="10" value="5">
+        <span class="ctrl-val" id="speedVal">5</span>
+      </div>
+    </div>
+
+    <!-- Grid canvas -->
+    <div class="panel" style="padding:10px;">
+      <h3>Grid <span id="gridDims" style="color:var(--text-dim);font-weight:normal"></span></h3>
+      <canvas id="gridCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- MIDDLE: TILT -->
+  <div class="col">
+    <div class="panel">
+      <h3>Tilt — Sensor #0</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <canvas id="tiltDisc" width="140" height="140"></canvas>
+        <div id="tiltZBar"><div id="tiltZFill"></div></div>
+      </div>
+      <div class="tilt-vals" id="tiltVals">X: 0  Y: 0  Z: 127</div>
+    </div>
+
+    <div class="panel">
+      <h3>Tilt Simulator</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div class="sim-row">
+          <span class="sim-label">X</span>
+          <input type="range" id="simX" min="0" max="255" value="128">
+          <span id="simXVal" style="color:var(--amber-glow);width:28px">128</span>
+        </div>
+        <div class="sim-row">
+          <span class="sim-label">Y</span>
+          <input type="range" id="simY" min="0" max="255" value="128">
+          <span id="simYVal" style="color:var(--amber-glow);width:28px">128</span>
+        </div>
+        <div class="sim-row">
+          <span class="sim-label">Z</span>
+          <input type="range" id="simZ" min="0" max="255" value="200">
+          <span id="simZVal" style="color:var(--amber-glow);width:28px">200</span>
+        </div>
+        <button id="btnSimTilt" style="margin-top:4px;">Send Simulated Tilt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: LOG -->
+  <div class="col" style="flex:1;min-width:240px;">
+    <div class="panel" style="flex:1;">
+      <h3>
+        Event Log
+        <button style="float:right;padding:2px 8px;font-size:11px;" id="btnClearLog">clear</button>
+      </h3>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ═══════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════
+const S = {
+  ws: null,
+  connected: false,
+  W: 8, H: 8,                     // grid dimensions from hello
+  grid: null,                      // Uint8Array[W*H] — LED levels 0-15
+  mode: "ripple",
+  speed: 5,
+  tilt: { x: 128, y: 128, z: 200 },
+  modeState: {},
+  animId: null,
+  lastTick: 0,
+  score: 0,
+  flushBuf: null,                  // pending LED rows to send (Set of row indices)
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════════════
+const CELL = 34, GAP = 3;
+const canvas = document.getElementById("gridCanvas");
+const ctx = canvas.getContext("2d");
+
+const tiltCanvas = document.getElementById("tiltDisc");
+const tiltCtx = tiltCanvas.getContext("2d");
+
+function resizeGrid() {
+  const W = S.W, H = S.H;
+  canvas.width  = W * (CELL + GAP) - GAP;
+  canvas.height = H * (CELL + GAP) - GAP;
+  document.getElementById("gridDims").textContent = `${W} × ${H}`;
+  S.grid = new Uint8Array(W * H);
+  S.flushBuf = new Set();
+}
+
+// amber colour for a LED level 0-15
+function levelToColor(lvl) {
+  if (lvl === 0) return "#0a0500";
+  const t = lvl / 15;
+  const r = Math.round(30  + t * 225);
+  const g = Math.round(8   + t * 120);
+  const b = Math.round(0);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawGrid() {
+  const W = S.W, H = S.H;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const lvl = S.grid[y * W + x];
+      ctx.fillStyle = levelToColor(lvl);
+      ctx.beginPath();
+      ctx.roundRect(
+        x * (CELL + GAP), y * (CELL + GAP),
+        CELL, CELL, 4
+      );
+      ctx.fill();
+    }
+  }
+}
+
+function drawTilt() {
+  const c = tiltCanvas, cx = 70, cy = 70, r = 62;
+  tiltCtx.clearRect(0, 0, c.width, c.height);
+
+  // background disc
+  tiltCtx.fillStyle = "#0a0500";
+  tiltCtx.beginPath();
+  tiltCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  tiltCtx.fill();
+
+  // rings
+  tiltCtx.strokeStyle = "#3a2000";
+  for (let ri = 1; ri <= 3; ri++) {
+    tiltCtx.beginPath();
+    tiltCtx.arc(cx, cy, r * ri / 3, 0, Math.PI * 2);
+    tiltCtx.stroke();
+  }
+
+  // dot position from tilt X/Y (centre = 128)
+  const nx = (S.tilt.x - 128) / 128;
+  const ny = (S.tilt.y - 128) / 128;
+  const dx = nx * r * 0.85;
+  const dy = ny * r * 0.85;
+
+  // glow
+  const grad = tiltCtx.createRadialGradient(cx+dx, cy+dy, 0, cx+dx, cy+dy, 14);
+  grad.addColorStop(0, "#ffaa33");
+  grad.addColorStop(1, "transparent");
+  tiltCtx.fillStyle = grad;
+  tiltCtx.beginPath();
+  tiltCtx.arc(cx + dx, cy + dy, 14, 0, Math.PI * 2);
+  tiltCtx.fill();
+
+  tiltCtx.fillStyle = "#ff8800";
+  tiltCtx.beginPath();
+  tiltCtx.arc(cx + dx, cy + dy, 6, 0, Math.PI * 2);
+  tiltCtx.fill();
+
+  // cross-hair
+  tiltCtx.strokeStyle = "#5a3000";
+  tiltCtx.beginPath(); tiltCtx.moveTo(cx, cy - r); tiltCtx.lineTo(cx, cy + r); tiltCtx.stroke();
+  tiltCtx.beginPath(); tiltCtx.moveTo(cx - r, cy); tiltCtx.lineTo(cx + r, cy); tiltCtx.stroke();
+
+  // Z bar
+  const zPct = S.tilt.z / 255;
+  document.getElementById("tiltZFill").style.height = `${zPct * 100}%`;
+  document.getElementById("tiltVals").textContent =
+    `X: ${S.tilt.x}  Y: ${S.tilt.y}  Z: ${S.tilt.z}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  GRID HELPERS
+// ═══════════════════════════════════════════════════════════════════════
+function setLed(x, y, lvl) {
+  if (x < 0 || x >= S.W || y < 0 || y >= S.H) return;
+  const idx = y * S.W + x;
+  if (S.grid[idx] === lvl) return;
+  S.grid[idx] = lvl;
+  if (S.flushBuf) S.flushBuf.add(y);
+}
+
+function fillGrid(lvl) {
+  S.grid.fill(lvl);
+  for (let r = 0; r < S.H; r++) S.flushBuf.add(r);
+}
+
+function clearGrid() { fillGrid(0); }
+
+// Build a row bitmask from grid levels (level>0 → bit set)
+function rowBitmask(y) {
+  let bits = 0;
+  for (let x = 0; x < S.W; x++) {
+    if (S.grid[y * S.W + x] > 0) bits |= (1 << x);
+  }
+  return bits;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════════
+function connect() {
+  const raw = document.getElementById("wsUrl").value.trim();
+  const url = raw.startsWith("ws://") || raw.startsWith("wss://") ? raw : `ws://${raw}`;
+  setStatus("connecting", `Connecting to ${url}…`);
+  try {
+    S.ws = new WebSocket(url);
+  } catch(e) {
+    setStatus("disconnected", `URL error: ${e.message}`);
+    return;
+  }
+
+  S.ws.onopen = () => {
+    S.connected = true;
+    setStatus("connected", "Connected");
+    document.getElementById("btnConnect").disabled = true;
+    document.getElementById("btnDisconnect").disabled = false;
+    logEntry("Connected to server", "log-hello");
+  };
+
+  S.ws.onclose = () => {
+    S.connected = false;
+    setStatus("disconnected", "Disconnected");
+    document.getElementById("btnConnect").disabled = false;
+    document.getElementById("btnDisconnect").disabled = true;
+    logEntry("Connection closed", "log-sys");
+  };
+
+  S.ws.onerror = (e) => {
+    logEntry(`WebSocket error (see console)`, "log-err");
+    console.error("WS error:", e);
+  };
+
+  S.ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleMessage(msg);
+  };
+}
+
+function disconnect() {
+  if (S.ws) { S.ws.close(); S.ws = null; }
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case "hello":
+      S.W = msg.width  || 8;
+      S.H = msg.height || 8;
+      resizeGrid();
+      document.getElementById("deviceInfo").textContent =
+        `id: ${msg.id}  type: ${msg.type_name}  ${S.W}×${S.H}`;
+      logEntry(`HELLO  id=${msg.id}  ${S.W}×${S.H}`, "log-hello");
+      startMode(S.mode);
+      break;
+
+    case "key":
+      logEntry(`KEY  x=${msg.x} y=${msg.y} s=${msg.s}`, "log-key");
+      MODES[S.mode].onKey(S.modeState, msg.x, msg.y, msg.s);
+      break;
+
+    case "tilt":
+      S.tilt = { x: msg.x ?? 128, y: msg.y ?? 128, z: msg.z ?? 128 };
+      logEntry(`TILT  n=${msg.n} x=${msg.x} y=${msg.y} z=${msg.z}`, "log-tilt");
+      MODES[S.mode].onTilt(S.modeState, msg.n, msg.x, msg.y, msg.z);
+      break;
+
+    default:
+      logEntry(`MSG  ${JSON.stringify(msg)}`, "log-sys");
+  }
+}
+
+// Send LED commands to server
+function sendLedSet(x, y, s) {
+  if (!S.connected) return;
+  S.ws.send(JSON.stringify({ type: "led_set", x, y, s: s > 0 ? 1 : 0 }));
+}
+
+function sendLedAll(s) {
+  if (!S.connected) return;
+  S.ws.send(JSON.stringify({ type: "led_all", s: s > 0 ? 1 : 0 }));
+}
+
+function sendLedRow(y, s_list) {
+  if (!S.connected) return;
+  S.ws.send(JSON.stringify({ type: "led_row", x: 0, y, s: s_list }));
+}
+
+// Flush changed rows to server
+function flushToServer() {
+  if (!S.connected || !S.flushBuf) return;
+  for (const y of S.flushBuf) {
+    const row = Array.from(S.grid.slice(y * S.W, y * S.W + S.W)).map(v => v > 0 ? 1 : 0);
+    sendLedRow(y, row);
+  }
+  S.flushBuf.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  STATUS / LOG
+// ═══════════════════════════════════════════════════════════════════════
+function setStatus(state, text) {
+  const dot = document.getElementById("statusDot");
+  dot.className = `status-dot ${state}`;
+  document.getElementById("statusText").textContent = text;
+}
+
+const LOG_MAX = 60;
+const logEl = document.getElementById("log");
+
+function logEntry(text, cls = "log-sys") {
+  const d = document.createElement("div");
+  d.className = cls;
+  const now = new Date();
+  const ts = `${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}:${now.getSeconds().toString().padStart(2,"0")}`;
+  d.textContent = `[${ts}] ${text}`;
+  logEl.appendChild(d);
+  while (logEl.children.length > LOG_MAX) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════════
+function loop(ts) {
+  S.animId = requestAnimationFrame(loop);
+  const interval = 1000 / (S.speed * 4 + 4);   // ~8fps (speed=1) to ~44fps (speed=10)
+  if (ts - S.lastTick >= interval) {
+    S.lastTick = ts;
+    if (S.connected) {
+      MODES[S.mode].tick(S.modeState);
+      flushToServer();
+    }
+  }
+  drawGrid();
+  drawTilt();
+  document.getElementById("scoreDisplay").textContent =
+    (S.mode === "snake") ? `Score: ${S.score}` : "";
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODES
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── 1. RIPPLE ──────────────────────────────────────────────────────────
+const modeRipple = {
+  init(ms) {
+    ms.ripples = [];   // [{cx,cy,r,max}]
+    clearGrid();
+  },
+  tick(ms) {
+    clearGrid();
+    // tilt offsets origin slightly
+    const ox = (S.tilt.x - 128) / 128 * 2;
+    const oy = (S.tilt.y - 128) / 128 * 2;
+    for (let r = ms.ripples.length - 1; r >= 0; r--) {
+      const rp = ms.ripples[r];
+      rp.r += 0.4;
+      for (let y = 0; y < S.H; y++) {
+        for (let x = 0; x < S.W; x++) {
+          const dist = Math.hypot(x - rp.cx + ox, y - rp.cy + oy);
+          const diff = Math.abs(dist - rp.r);
+          const lvl = Math.max(0, 15 - diff * 5) | 0;
+          if (lvl > 0) {
+            const cur = S.grid[y * S.W + x];
+            setLed(x, y, Math.min(15, cur + lvl));
+          }
+        }
+      }
+      if (rp.r > rp.max) ms.ripples.splice(r, 1);
+    }
+  },
+  onKey(ms, x, y, s) {
+    if (s === 1) {
+      const max = Math.max(S.W, S.H) + 4;
+      ms.ripples.push({ cx: x, cy: y, r: 0, max });
+      if (ms.ripples.length > 8) ms.ripples.shift();
+    }
+  },
+  onTilt() {},
+};
+
+// ── 2. MATRIX RAIN ─────────────────────────────────────────────────────
+const modeRain = {
+  init(ms) {
+    ms.drops = [];   // [{x, y, speed, len}]
+    clearGrid();
+    for (let x = 0; x < 8; x++) {   // pre-seed a few drops
+      if (Math.random() < 0.5) {
+        ms.drops.push({ x, y: Math.random() * 8 - 8, speed: 0.3 + Math.random() * 0.5, len: 2 + Math.random() * 4 | 0 });
+      }
+    }
+  },
+  tick(ms) {
+    clearGrid();
+    // Tilt X biases spawn column; high tilt Z = faster drops
+    const speedBoost = (S.tilt.z - 128) / 128 * 0.4;
+    // move drops
+    for (let i = ms.drops.length - 1; i >= 0; i--) {
+      const d = ms.drops[i];
+      d.y += d.speed + speedBoost;
+      // draw trail
+      for (let t = 0; t < d.len; t++) {
+        const gy = Math.floor(d.y) - t;
+        if (gy < 0 || gy >= S.H) continue;
+        const lvl = t === 0 ? 15 : Math.max(0, 15 - t * 3) | 0;
+        setLed(d.x, gy, lvl);
+      }
+      if (d.y - d.len > S.H) ms.drops.splice(i, 1);
+    }
+    // spawn new drops
+    if (ms.drops.length < S.W * 2 && Math.random() < 0.4) {
+      // tilt X biases which column
+      const tiltBias = (S.tilt.x - 128) / 128;
+      const col = Math.min(S.W - 1, Math.max(0,
+        Math.floor((Math.random() + tiltBias * 0.5) * S.W)
+      ));
+      ms.drops.push({ x: col, y: -1, speed: 0.25 + Math.random() * 0.5, len: 2 + (Math.random() * 5 | 0) });
+    }
+  },
+  onKey(ms, x, y, s) {
+    if (s === 1) {
+      // pressed cell briefly flashes full, then spawns a drop from that column
+      setLed(x, y, 15);
+      ms.drops.push({ x, y: y - 1, speed: 0.5 + Math.random() * 0.3, len: 3 + (Math.random() * 3 | 0) });
+    }
+  },
+  onTilt() {},
+};
+
+// ── 3. SNAKE ───────────────────────────────────────────────────────────
+const modeSnake = {
+  init(ms) {
+    ms.body     = [{ x: 4, y: 4 }, { x: 3, y: 4 }, { x: 2, y: 4 }];
+    ms.dir      = { x: 1, y: 0 };
+    ms.nextDir  = { x: 1, y: 0 };
+    ms.food     = null;
+    ms.alive    = true;
+    ms.flashTick = 0;
+    ms.tiltDelay = 0;
+    S.score     = 0;
+    this._placeFood(ms);
+    clearGrid();
+  },
+  _placeFood(ms) {
+    const occupied = new Set(ms.body.map(b => `${b.x},${b.y}`));
+    const free = [];
+    for (let y = 0; y < S.H; y++)
+      for (let x = 0; x < S.W; x++)
+        if (!occupied.has(`${x},${y}`)) free.push({ x, y });
+    if (free.length) ms.food = free[Math.random() * free.length | 0];
+  },
+  tick(ms) {
+    clearGrid();
+    if (!ms.alive) {
+      // death flash
+      ms.flashTick++;
+      if (ms.flashTick % 6 < 3) fillGrid(2);
+      if (ms.flashTick > 30) this.init(ms);
+      return;
+    }
+
+    // tilt steering — only steer if tilt is significantly off-center
+    ms.tiltDelay = (ms.tiltDelay + 1) % 3;
+    if (ms.tiltDelay === 0) {
+      const tx = S.tilt.x - 128, ty = S.tilt.y - 128;
+      if (Math.abs(tx) > Math.abs(ty)) {
+        if (tx > 40 && ms.dir.x === 0)       ms.nextDir = { x: 1, y: 0 };
+        else if (tx < -40 && ms.dir.x === 0) ms.nextDir = { x: -1, y: 0 };
+      } else {
+        if (ty > 40 && ms.dir.y === 0)       ms.nextDir = { x: 0, y: 1 };
+        else if (ty < -40 && ms.dir.y === 0) ms.nextDir = { x: 0, y: -1 };
+      }
+    }
+
+    ms.dir = ms.nextDir;
+    const head = { x: ms.body[0].x + ms.dir.x, y: ms.body[0].y + ms.dir.y };
+
+    // wall wrap
+    head.x = (head.x + S.W) % S.W;
+    head.y = (head.y + S.H) % S.H;
+
+    // self collision
+    if (ms.body.some(b => b.x === head.x && b.y === head.y)) {
+      ms.alive = false;
+      ms.flashTick = 0;
+      return;
+    }
+
+    ms.body.unshift(head);
+    if (ms.food && head.x === ms.food.x && head.y === ms.food.y) {
+      S.score++;
+      this._placeFood(ms);
+    } else {
+      ms.body.pop();
+    }
+
+    // draw body
+    ms.body.forEach((b, i) => setLed(b.x, b.y, i === 0 ? 15 : 7));
+    // draw food blinking
+    if (ms.food) {
+      const blink = (Date.now() / 200 | 0) % 2;
+      setLed(ms.food.x, ms.food.y, blink ? 12 : 4);
+    }
+  },
+  onKey(ms, x, y, s) {
+    if (s !== 1 || !ms.alive) return;
+    // arrow-key logic: press on grid relative to head to steer
+    const head = ms.body[0];
+    const dx = x - head.x, dy = y - head.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0 && ms.dir.x === 0)  ms.nextDir = { x: 1, y: 0 };
+      if (dx < 0 && ms.dir.x === 0)  ms.nextDir = { x: -1, y: 0 };
+    } else {
+      if (dy > 0 && ms.dir.y === 0)  ms.nextDir = { x: 0, y: 1 };
+      if (dy < 0 && ms.dir.y === 0)  ms.nextDir = { x: 0, y: -1 };
+    }
+  },
+  onTilt() {},
+};
+
+// ── 4. SPIRAL ──────────────────────────────────────────────────────────
+const modeSpiral = {
+  init(ms) {
+    ms.path    = buildSpiralPath(S.W, S.H);
+    ms.pos     = 0;
+    ms.dir     = 1;
+    ms.trail   = 6;
+    ms.tiltBrightness = 15;
+    clearGrid();
+  },
+  tick(ms) {
+    clearGrid();
+    ms.pos = (ms.pos + ms.dir + ms.path.length) % ms.path.length;
+    const trailLen = Math.max(2, ms.trail);
+    for (let t = 0; t < trailLen; t++) {
+      const i = (ms.pos - t * ms.dir + ms.path.length * 2) % ms.path.length;
+      const { x, y } = ms.path[i];
+      const lvl = Math.max(1, (ms.tiltBrightness - t * 2)) | 0;
+      setLed(x, y, lvl);
+    }
+  },
+  onKey(ms, x, y, s) {
+    if (s === 1) ms.dir *= -1;   // any press reverses direction
+  },
+  onTilt(ms, n, tx, ty, tz) {
+    // tilt Z controls trail length (0=short, 255=long)
+    ms.trail = 2 + (tz / 255 * 10 | 0);
+    ms.tiltBrightness = 8 + (Math.abs(tx - 128) / 128 * 7 | 0);
+  },
+};
+
+function buildSpiralPath(W, H) {
+  // outside-in rectangle-peel spiral
+  const visited = new Uint8Array(W * H);
+  const path = [];
+  const dirs = [{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0},{dx:0,dy:-1}];
+  let x = 0, y = 0, di = 0;
+  for (let step = 0; step < W * H; step++) {
+    path.push({ x, y });
+    visited[y * W + x] = 1;
+    const { dx, dy } = dirs[di];
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H || visited[ny * W + nx]) {
+      di = (di + 1) % 4;
+      x += dirs[di].dx;
+      y += dirs[di].dy;
+    } else {
+      x = nx; y = ny;
+    }
+  }
+  return path;
+}
+
+// ── 5. DIRECT ──────────────────────────────────────────────────────────
+const modeDirect = {
+  init() { clearGrid(); },
+  tick() {},      // no autonomous animation
+  onKey(ms, x, y, s) {
+    const lvl = s > 0 ? 15 : 0;
+    setLed(x, y, lvl);
+  },
+  onTilt() {},
+};
+
+const MODES = {
+  ripple: modeRipple,
+  rain:   modeRain,
+  snake:  modeSnake,
+  spiral: modeSpiral,
+  direct: modeDirect,
+};
+
+function startMode(name) {
+  S.mode = name;
+  S.modeState = {};
+  S.score = 0;
+  MODES[name].init(S.modeState);
+  // update button states
+  document.querySelectorAll(".mode-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.mode === name);
+  });
+  logEntry(`Mode: ${name}`, "log-sys");
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  GRID CANVAS CLICK → inject key event
+// ═══════════════════════════════════════════════════════════════════════
+canvas.addEventListener("mousedown", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const gx = Math.floor(mx / (CELL + GAP));
+  const gy = Math.floor(my / (CELL + GAP));
+  if (gx >= 0 && gx < S.W && gy >= 0 && gy < S.H) {
+    MODES[S.mode].onKey(S.modeState, gx, gy, 1);
+    logEntry(`CLICK  x=${gx} y=${gy} (grid)`, "log-key");
+  }
+});
+
+canvas.addEventListener("mouseup", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const gx = Math.floor(mx / (CELL + GAP));
+  const gy = Math.floor(my / (CELL + GAP));
+  if (gx >= 0 && gx < S.W && gy >= 0 && gy < S.H) {
+    MODES[S.mode].onKey(S.modeState, gx, gy, 0);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  KEYBOARD  (snake control)
+// ═══════════════════════════════════════════════════════════════════════
+document.addEventListener("keydown", (e) => {
+  if (S.mode !== "snake") return;
+  const ms = S.modeState;
+  if (!ms.alive) return;
+  const KEY_ACTIONS = {
+    ArrowRight: () => { if (ms.dir.x === 0) ms.nextDir = { x: 1, y: 0 }; },
+    ArrowLeft:  () => { if (ms.dir.x === 0) ms.nextDir = { x: -1, y: 0 }; },
+    ArrowDown:  () => { if (ms.dir.y === 0) ms.nextDir = { x: 0, y: 1 }; },
+    ArrowUp:    () => { if (ms.dir.y === 0) ms.nextDir = { x: 0, y: -1 }; },
+  };
+  if (KEY_ACTIONS[e.key]) { e.preventDefault(); KEY_ACTIONS[e.key](); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CONTROLS WIRING
+// ═══════════════════════════════════════════════════════════════════════
+document.getElementById("btnConnect").addEventListener("click", connect);
+document.getElementById("btnDisconnect").addEventListener("click", disconnect);
+document.getElementById("btnClearLog").addEventListener("click", () => { logEl.innerHTML = ""; });
+
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (S.connected) startMode(btn.dataset.mode);
+    else {
+      S.mode = btn.dataset.mode;
+      document.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === S.mode));
+    }
+  });
+});
+
+const speedSlider = document.getElementById("speedSlider");
+speedSlider.addEventListener("input", () => {
+  S.speed = +speedSlider.value;
+  document.getElementById("speedVal").textContent = S.speed;
+});
+
+// Tilt simulator sliders
+["X","Y","Z"].forEach(axis => {
+  const sl = document.getElementById(`sim${axis}`);
+  const vl = document.getElementById(`sim${axis}Val`);
+  sl.addEventListener("input", () => {
+    vl.textContent = sl.value;
+  });
+});
+
+document.getElementById("btnSimTilt").addEventListener("click", () => {
+  const x = +document.getElementById("simX").value;
+  const y = +document.getElementById("simY").value;
+  const z = +document.getElementById("simZ").value;
+  S.tilt = { x, y, z };
+  MODES[S.mode].onTilt(S.modeState, 0, x, y, z);
+  logEntry(`SIM TILT  x=${x} y=${y} z=${z}`, "log-tilt");
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════════
+resizeGrid();
+setStatus("disconnected", "Disconnected — enter ws://host:port above");
+logEntry("MonomePyBridge WebSocket Demo ready.", "log-sys");
+logEntry("Open a bridge with: python -m monomepybridge.bridges.ws_bridge  (or via GUI)", "log-sys");
+logEntry("Connect above, then press buttons on the grid or use the mode selector.", "log-sys");
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
