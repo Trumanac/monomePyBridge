@@ -82,7 +82,7 @@ def test_midi_bridge_no_ports_does_not_crash(monkeypatch):
 
 # ── WebSocket bridge: end-to-end via real localhost socket ─────────────
 
-def _ws_client_roundtrip(port: int) -> dict:
+def _ws_client_roundtrip(port: int, dev=None) -> dict:
     """Connect, read hello, send led_set, request a key event back, close."""
     import websockets
 
@@ -97,6 +97,11 @@ def _ws_client_roundtrip(port: int) -> dict:
             await ws.send(json.dumps({"type": "led_set", "x": 3, "y": 4, "level": 12}))
             # Wait for the server to apply it (round-trip is async).
             await asyncio.sleep(0.1)
+            # Capture LED state *before* the connection closes; the bridge
+            # clears all LEDs on last-client-disconnect, so checking afterwards
+            # would always return 0.
+            if dev is not None:
+                captured["led_3_4"] = dev.get_led(3, 4)
 
     asyncio.run(run())
     return captured
@@ -109,12 +114,12 @@ def test_websocket_bridge_hello_and_led():
     bridge.start()
     try:
         assert bridge.port > 0
-        result = _ws_client_roundtrip(bridge.port)
+        result = _ws_client_roundtrip(bridge.port, dev)
         assert result["hello"]["type"] == "hello"
         assert result["hello"]["id"] == "ws-test"
         assert result["hello"]["width"] == 8
         # LED command should have landed on the virtual device.
-        assert dev.get_led(3, 4) == 12
+        assert result["led_3_4"] == 12
     finally:
         bridge.stop()
         dev.stop()
@@ -188,6 +193,9 @@ def test_manager_websocket_toggle_starts_and_stops(tmp_paths):
     mgr.start()
     try:
         slot = mgr.attach_virtual_grid("virt-ws", 8, 8)
+        # websocket_enabled defaults to True; disable first to establish a
+        # known-off baseline before exercising the toggle logic.
+        mgr.set_websocket_enabled(slot.device.id, False)
         assert slot.ws is None
         mgr.set_websocket_enabled(slot.device.id, True)
         assert slot.ws is not None
