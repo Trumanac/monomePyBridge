@@ -84,6 +84,10 @@ class MainWindow(QMainWindow):
         act_about = QAction("&About", self)
         act_about.triggered.connect(self._on_about)
         m_help.addAction(act_about)
+        act_ws_demo = QAction("WebSocket &Demo…", self)
+        act_ws_demo.setToolTip("Open the interactive WebSocket demo page in your browser")
+        act_ws_demo.triggered.connect(self._on_open_ws_demo)
+        m_help.addAction(act_ws_demo)
 
         # Central layout: splitter [ devices | panel ]
         central = QWidget()
@@ -287,6 +291,16 @@ class MainWindow(QMainWindow):
 
     def _on_reveal_config(self) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(config_dir())))
+
+    def _on_open_ws_demo(self) -> None:
+        from pathlib import Path
+        demo = Path(__file__).parent.parent.parent / "tests" / "ws_demo.html"
+        if not demo.exists():
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Demo not found",
+                                f"Could not locate ws_demo.html at:\n{demo}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(demo)))
 
     # ── saved profiles browser ──────────────────────────────────────────
     def _on_show_profiles(self) -> None:

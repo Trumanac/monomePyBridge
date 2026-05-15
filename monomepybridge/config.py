@@ -89,7 +89,7 @@ class DeviceProfile:
     midi_enabled: bool = False
     midi_channel: int = 1            # 1-16
     midi_base_note: int = 36         # C2; note = base + y * width + x
-    websocket_enabled: bool = False
+    websocket_enabled: bool = True
     websocket_port: int = 0          # 0 = auto
     # Persistent virtual grid: when True the manager auto-attaches a
     # VirtualGridDevice with these dimensions at startup.

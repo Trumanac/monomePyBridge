@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MonomePyBridge WebSocket Demo</title>
+<!-- Favicons — all sizes for cross-browser support -->
+<link rel="icon" type="image/x-icon"  href="../monomepybridge/resources/icon.ico">
+<link rel="icon" type="image/png" sizes="16x16"   href="../monomepybridge/resources/icon_16.png">
+<link rel="icon" type="image/png" sizes="32x32"   href="../monomepybridge/resources/icon_32.png">
+<link rel="icon" type="image/png" sizes="48x48"   href="../monomepybridge/resources/icon_48.png">
+<link rel="icon" type="image/png" sizes="64x64"   href="../monomepybridge/resources/icon_64.png">
+<link rel="icon" type="image/png" sizes="128x128" href="../monomepybridge/resources/icon_128.png">
+<link rel="icon" type="image/png" sizes="256x256" href="../monomepybridge/resources/icon_256.png">
+<link rel="apple-touch-icon"      sizes="128x128" href="../monomepybridge/resources/icon_128.png">
 <style>
   :root {
     --bg: #111;
@@ -192,6 +201,11 @@
 
   /* ---- score ---- */
   #scoreDisplay { color: var(--amber-glow); font-size: 13px; }
+  #highScoreDisplay { color: var(--text-dim); font-size: 12px; margin-left: 12px; }
+
+  /* ---- audio toggle ---- */
+  #btnAudio { padding: 4px 10px; font-size: 12px; }
+  #btnAudio.muted { background: #2a2a2a; border-color: #555; color: #666; }
 </style>
 </head>
 <body>
@@ -211,6 +225,7 @@
   <span id="deviceInfo">—</span>
   &nbsp;|&nbsp;
   <span id="scoreDisplay"></span>
+  <span id="highScoreDisplay"></span>
 </div>
 
 <div class="row">
@@ -231,6 +246,11 @@
         <span class="ctrl-label">Speed</span>
         <input type="range" id="speedSlider" min="1" max="10" value="5">
         <span class="ctrl-val" id="speedVal">5</span>
+      </div>
+      <div class="ctrl-row" style="margin-top:6px;">
+        <span class="ctrl-label">Sound</span>
+        <button id="btnAudio">▶ Sonar On</button>
+        <span style="color:var(--text-dim);font-size:11px;margin-left:6px;">MIDI piano → disable in app panel</span>
       </div>
     </div>
 
@@ -296,8 +316,8 @@
 const S = {
   ws: null,
   connected: false,
-  W: 8, H: 8,                     // grid dimensions from hello
-  grid: null,                      // Uint8Array[W*H] — LED levels 0-15
+  W: 8, H: 8,
+  grid: null,
   mode: "ripple",
   speed: 5,
   tilt: { x: 128, y: 128, z: 200 },
@@ -305,7 +325,11 @@ const S = {
   animId: null,
   lastTick: 0,
   score: 0,
-  flushBuf: null,                  // pending LED rows to send (Set of row indices)
+  highScore: parseInt(localStorage.getItem("snakeHighScore") || "0", 10),
+  flushBuf: null,
+  // audio
+  audioEnabled: true,
+  audioCtx: null,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -473,6 +497,10 @@ function connect() {
 }
 
 function disconnect() {
+  // Best-effort clear of device LEDs before closing the connection
+  if (S.ws && S.connected) {
+    S.ws.send(JSON.stringify({ type: "led_all", level: 0 }));
+  }
   if (S.ws) { S.ws.close(); S.ws = null; }
 }
 
@@ -490,6 +518,7 @@ function handleMessage(msg) {
 
     case "key":
       logEntry(`KEY  x=${msg.x} y=${msg.y} s=${msg.s}`, "log-key");
+      playNote(msg.x, msg.y, msg.s);
       MODES[S.mode].onKey(S.modeState, msg.x, msg.y, msg.s);
       break;
 
@@ -505,27 +534,27 @@ function handleMessage(msg) {
 }
 
 // Send LED commands to server
-function sendLedSet(x, y, s) {
+function sendLedSet(x, y, lvl) {
   if (!S.connected) return;
-  S.ws.send(JSON.stringify({ type: "led_set", x, y, s: s > 0 ? 1 : 0 }));
+  S.ws.send(JSON.stringify({ type: "led_set", x, y, level: lvl }));
 }
 
-function sendLedAll(s) {
+function sendLedAll(lvl) {
   if (!S.connected) return;
-  S.ws.send(JSON.stringify({ type: "led_all", s: s > 0 ? 1 : 0 }));
+  S.ws.send(JSON.stringify({ type: "led_all", level: lvl }));
 }
 
-function sendLedRow(y, s_list) {
+function sendLedRow(y, levels) {
   if (!S.connected) return;
-  S.ws.send(JSON.stringify({ type: "led_row", x: 0, y, s: s_list }));
+  S.ws.send(JSON.stringify({ type: "led_row", x: 0, y, levels }));
 }
 
 // Flush changed rows to server
 function flushToServer() {
   if (!S.connected || !S.flushBuf) return;
   for (const y of S.flushBuf) {
-    const row = Array.from(S.grid.slice(y * S.W, y * S.W + S.W)).map(v => v > 0 ? 1 : 0);
-    sendLedRow(y, row);
+    const levels = Array.from(S.grid.slice(y * S.W, y * S.W + S.W));
+    sendLedRow(y, levels);
   }
   S.flushBuf.clear();
 }
@@ -568,8 +597,14 @@ function loop(ts) {
   }
   drawGrid();
   drawTilt();
-  document.getElementById("scoreDisplay").textContent =
-    (S.mode === "snake") ? `Score: ${S.score}` : "";
+  if (S.mode === "snake") {
+    document.getElementById("scoreDisplay").textContent = `Score: ${S.score}`;
+    document.getElementById("highScoreDisplay").textContent =
+      S.highScore > 0 ? `Best: ${S.highScore}` : "";
+  } else {
+    document.getElementById("scoreDisplay").textContent = "";
+    document.getElementById("highScoreDisplay").textContent = "";
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -584,9 +619,9 @@ const modeRipple = {
   },
   tick(ms) {
     clearGrid();
-    // tilt offsets origin slightly
-    const ox = (S.tilt.x - 128) / 128 * 2;
-    const oy = (S.tilt.y - 128) / 128 * 2;
+    // tilt offsets ripple origin — wider range for hardware with limited sensor throw
+    const ox = (S.tilt.x - 128) / 128 * 4;
+    const oy = (S.tilt.y - 128) / 128 * 4;
     for (let r = ms.ripples.length - 1; r >= 0; r--) {
       const rp = ms.ripples[r];
       rp.r += 0.4;
@@ -647,7 +682,7 @@ const modeRain = {
       // tilt X biases which column
       const tiltBias = (S.tilt.x - 128) / 128;
       const col = Math.min(S.W - 1, Math.max(0,
-        Math.floor((Math.random() + tiltBias * 0.5) * S.W)
+        Math.floor((Math.random() + tiltBias * 2.0) * S.W)
       ));
       ms.drops.push({ x: col, y: -1, speed: 0.25 + Math.random() * 0.5, len: 2 + (Math.random() * 5 | 0) });
     }
@@ -665,14 +700,16 @@ const modeRain = {
 // ── 3. SNAKE ───────────────────────────────────────────────────────────
 const modeSnake = {
   init(ms) {
-    ms.body     = [{ x: 4, y: 4 }, { x: 3, y: 4 }, { x: 2, y: 4 }];
-    ms.dir      = { x: 1, y: 0 };
-    ms.nextDir  = { x: 1, y: 0 };
-    ms.food     = null;
-    ms.alive    = true;
-    ms.flashTick = 0;
-    ms.tiltDelay = 0;
-    S.score     = 0;
+    ms.body           = [{ x: 4, y: 4 }, { x: 3, y: 4 }, { x: 2, y: 4 }];
+    ms.dir            = { x: 1, y: 0 };
+    ms.nextDir        = { x: 1, y: 0 };
+    ms.food           = null;
+    ms.alive          = true;
+    ms.flashTick      = 0;
+    ms.tiltDelay      = 0;
+    ms.lastMove       = 0;   // timestamp of last snake step
+    ms.keyInputCooldown = 0; // suppress tilt steering after a button press
+    S.score           = 0;
     this._placeFood(ms);
     clearGrid();
   },
@@ -685,53 +722,69 @@ const modeSnake = {
     if (free.length) ms.food = free[Math.random() * free.length | 0];
   },
   tick(ms) {
+    // Time-based movement: speed=1 → ~1 step/sec, speed=10 → ~10 steps/sec
+    // This decouples snake pace from the global animation tick rate.
+    const now = Date.now();
+    const moveInterval = Math.max(80, 1100 - S.speed * 100);
+
     clearGrid();
     if (!ms.alive) {
-      // death flash
       ms.flashTick++;
       if (ms.flashTick % 6 < 3) fillGrid(2);
       if (ms.flashTick > 30) this.init(ms);
       return;
     }
 
-    // tilt steering — only steer if tilt is significantly off-center
-    ms.tiltDelay = (ms.tiltDelay + 1) % 3;
-    if (ms.tiltDelay === 0) {
-      const tx = S.tilt.x - 128, ty = S.tilt.y - 128;
-      if (Math.abs(tx) > Math.abs(ty)) {
-        if (tx > 40 && ms.dir.x === 0)       ms.nextDir = { x: 1, y: 0 };
-        else if (tx < -40 && ms.dir.x === 0) ms.nextDir = { x: -1, y: 0 };
+    if (now - ms.lastMove >= moveInterval) {
+      ms.lastMove = now;
+
+      // tilt steering — suppressed for several steps after a button press
+      if (ms.keyInputCooldown > 0) {
+        ms.keyInputCooldown--;
       } else {
-        if (ty > 40 && ms.dir.y === 0)       ms.nextDir = { x: 0, y: 1 };
-        else if (ty < -40 && ms.dir.y === 0) ms.nextDir = { x: 0, y: -1 };
+        ms.tiltDelay = (ms.tiltDelay + 1) % 3;
+        if (ms.tiltDelay === 0) {
+          const tx = S.tilt.x - 128, ty = S.tilt.y - 128;
+          if (Math.abs(tx) > Math.abs(ty)) {
+            if (tx > 20 && ms.dir.x === 0)       ms.nextDir = { x: 1, y: 0 };
+            else if (tx < -20 && ms.dir.x === 0) ms.nextDir = { x: -1, y: 0 };
+          } else {
+            if (ty > 20 && ms.dir.y === 0)       ms.nextDir = { x: 0, y: 1 };
+            else if (ty < -20 && ms.dir.y === 0) ms.nextDir = { x: 0, y: -1 };
+          }
+        }
+      }
+
+      ms.dir = ms.nextDir;
+      const head = { x: ms.body[0].x + ms.dir.x, y: ms.body[0].y + ms.dir.y };
+
+      // wall wrap
+      head.x = (head.x + S.W) % S.W;
+      head.y = (head.y + S.H) % S.H;
+
+      // self collision — exclude the tail tip: it will move away this same step
+      if (ms.body.slice(0, -1).some(b => b.x === head.x && b.y === head.y)) {
+        ms.alive = false;
+        ms.flashTick = 0;
+        return;
+      }
+
+      ms.body.unshift(head);
+      if (ms.food && head.x === ms.food.x && head.y === ms.food.y) {
+        S.score++;
+        if (S.score > S.highScore) {
+          S.highScore = S.score;
+          localStorage.setItem("snakeHighScore", S.highScore);
+        }
+        this._placeFood(ms);
+      } else {
+        ms.body.pop();
       }
     }
 
-    ms.dir = ms.nextDir;
-    const head = { x: ms.body[0].x + ms.dir.x, y: ms.body[0].y + ms.dir.y };
-
-    // wall wrap
-    head.x = (head.x + S.W) % S.W;
-    head.y = (head.y + S.H) % S.H;
-
-    // self collision
-    if (ms.body.some(b => b.x === head.x && b.y === head.y)) {
-      ms.alive = false;
-      ms.flashTick = 0;
-      return;
-    }
-
-    ms.body.unshift(head);
-    if (ms.food && head.x === ms.food.x && head.y === ms.food.y) {
-      S.score++;
-      this._placeFood(ms);
-    } else {
-      ms.body.pop();
-    }
-
-    // draw body
+    // Always draw body and food (even between moves, so food blinks and
+    // canvas stays in sync regardless of step timing)
     ms.body.forEach((b, i) => setLed(b.x, b.y, i === 0 ? 15 : 7));
-    // draw food blinking
     if (ms.food) {
       const blink = (Date.now() / 200 | 0) % 2;
       setLed(ms.food.x, ms.food.y, blink ? 12 : 4);
@@ -739,16 +792,20 @@ const modeSnake = {
   },
   onKey(ms, x, y, s) {
     if (s !== 1 || !ms.alive) return;
-    // arrow-key logic: press on grid relative to head to steer
+    // Press relative to head to steer. Diagonal presses are ignored to avoid
+    // ambiguity (require strictly larger axis to trigger a turn).
     const head = ms.body[0];
     const dx = x - head.x, dy = y - head.y;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (dx > 0 && ms.dir.x === 0)  ms.nextDir = { x: 1, y: 0 };
-      if (dx < 0 && ms.dir.x === 0)  ms.nextDir = { x: -1, y: 0 };
-    } else {
-      if (dy > 0 && ms.dir.y === 0)  ms.nextDir = { x: 0, y: 1 };
-      if (dy < 0 && ms.dir.y === 0)  ms.nextDir = { x: 0, y: -1 };
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    let changed = false;
+    if (adx > ady) {
+      if (dx > 0 && ms.dir.x === 0)  { ms.nextDir = { x: 1, y: 0 };  changed = true; }
+      if (dx < 0 && ms.dir.x === 0)  { ms.nextDir = { x: -1, y: 0 }; changed = true; }
+    } else if (ady > adx) {
+      if (dy > 0 && ms.dir.y === 0)  { ms.nextDir = { x: 0, y: 1 };  changed = true; }
+      if (dy < 0 && ms.dir.y === 0)  { ms.nextDir = { x: 0, y: -1 }; changed = true; }
     }
+    if (changed) ms.keyInputCooldown = 10; // hold off tilt for 10 steps
   },
   onTilt() {},
 };
@@ -826,6 +883,7 @@ const MODES = {
 };
 
 function startMode(name) {
+  sendLedAll(0);   // clear device LEDs before switching
   S.mode = name;
   S.modeState = {};
   S.score = 0;
@@ -847,6 +905,7 @@ canvas.addEventListener("mousedown", (e) => {
   const gx = Math.floor(mx / (CELL + GAP));
   const gy = Math.floor(my / (CELL + GAP));
   if (gx >= 0 && gx < S.W && gy >= 0 && gy < S.H) {
+    playNote(gx, gy, 1);
     MODES[S.mode].onKey(S.modeState, gx, gy, 1);
     logEntry(`CLICK  x=${gx} y=${gy} (grid)`, "log-key");
   }
@@ -886,6 +945,18 @@ document.getElementById("btnConnect").addEventListener("click", connect);
 document.getElementById("btnDisconnect").addEventListener("click", disconnect);
 document.getElementById("btnClearLog").addEventListener("click", () => { logEl.innerHTML = ""; });
 
+// Audio toggle
+document.getElementById("btnAudio").addEventListener("click", () => {
+  S.audioEnabled = !S.audioEnabled;
+  const btn = document.getElementById("btnAudio");
+  btn.textContent = S.audioEnabled ? "\u25b6 Sonar On" : "\u25a0 Sonar Off";
+  btn.classList.toggle("muted", !S.audioEnabled);
+  // Resume AudioContext if browser suspended it (autoplay policy)
+  if (S.audioEnabled && S.audioCtx && S.audioCtx.state === "suspended") {
+    S.audioCtx.resume();
+  }
+});
+
 document.querySelectorAll(".mode-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     if (S.connected) startMode(btn.dataset.mode);
@@ -921,10 +992,95 @@ document.getElementById("btnSimTilt").addEventListener("click", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  AUDIO — sonar FM synth
+// ═══════════════════════════════════════════════════════════════════════
+function getAudioCtx() {
+  if (!S.audioCtx) {
+    try { S.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { return null; }
+  }
+  if (S.audioCtx.state === "suspended") S.audioCtx.resume();
+  return S.audioCtx;
+}
+
+// Pentatonic minor note set — maps grid x to a pleasing scale
+const PENTA = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24, 27, 29, 31, 34, 36];
+
+function playNote(x, y, s) {
+  if (!S.audioEnabled || s === 0) return;
+  const actx = getAudioCtx();
+  if (!actx) return;
+  const now = actx.currentTime;
+
+  // Map grid position → base frequency (x = pitch class, y = octave band)
+  const semitones = PENTA[x % PENTA.length] + Math.floor(y * 12 / Math.max(S.H, 1));
+  const baseFreq  = 110 * Math.pow(2, semitones / 12);   // A2 root
+
+  // ── FM synthesis: modulator adds metallic overtones ──
+  const modulator  = actx.createOscillator();
+  const modGain    = actx.createGain();
+  modulator.type   = "sine";
+  modulator.frequency.value = baseFreq * 3.5;
+  // Modulation depth decays fast → punchy attack, then pure tone
+  modGain.gain.setValueAtTime(baseFreq * 5, now);
+  modGain.gain.exponentialRampToValueAtTime(1, now + 0.08);
+  modulator.connect(modGain);
+
+  // ── Carrier: sine with sonar pitch-drop sweep ──
+  const carrier   = actx.createOscillator();
+  carrier.type    = "sine";
+  carrier.frequency.setValueAtTime(baseFreq * 1.8, now);          // start higher
+  carrier.frequency.exponentialRampToValueAtTime(baseFreq, now + 0.12); // drop to target
+  modGain.connect(carrier.frequency);  // FM hook
+
+  // ── Output gain envelope: snap attack, long tail ──
+  const env = actx.createGain();
+  env.gain.setValueAtTime(0, now);
+  env.gain.linearRampToValueAtTime(0.35, now + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.12, now + 0.12);
+  env.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+  carrier.connect(env);
+
+  // ── Simple echo: one delay tap for underwater sonar feel ──
+  const delay      = actx.createDelay(0.5);
+  const delayGain  = actx.createGain();
+  delay.delayTime.value = 0.18;
+  delayGain.gain.setValueAtTime(0.28, now);
+  delayGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+  env.connect(delay);
+  delay.connect(delayGain);
+
+  env.connect(actx.destination);
+  delayGain.connect(actx.destination);
+
+  carrier.start(now);
+  modulator.start(now);
+  carrier.stop(now + 0.95);
+  modulator.stop(now + 0.95);
+}
+
+// Clear LEDs on tab close / refresh (best-effort — browser may not honour this)
+window.addEventListener("beforeunload", () => {
+  if (S.ws && S.connected) {
+    S.ws.send(JSON.stringify({ type: "led_all", level: 0 }));
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════════════════════
 resizeGrid();
 setStatus("disconnected", "Disconnected — enter ws://host:port above");
+
+// Auto-fill port from URL query string (?port=XXXX) when opened from the app
+(function autoFillPort() {
+  const params = new URLSearchParams(location.search);
+  const p = params.get("port");
+  if (p && /^\d+$/.test(p)) {
+    document.getElementById("wsUrl").value = `localhost:${p}`;
+    logEntry(`Auto-filled port ${p} from launch URL.`, "log-sys");
+  }
+})();
 logEntry("MonomePyBridge WebSocket Demo ready.", "log-sys");
 logEntry("Open a bridge with: python -m monomepybridge.bridges.ws_bridge  (or via GUI)", "log-sys");
 logEntry("Connect above, then press buttons on the grid or use the mode selector.", "log-sys");

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QProgressBar, QPushButton, QSlider, QSpinBox, QVBoxLayout,
@@ -78,6 +80,10 @@ class DevicePanel(QWidget):
         self._sp_ws_port.setRange(0, 65535)
         self._lbl_ws_status = QLabel("")
         self._lbl_ws_status.setStyleSheet("color: #888;")
+        self._btn_ws_demo = QPushButton("Open WebSocket Demo →")
+        self._btn_ws_demo.setVisible(False)
+        self._btn_ws_demo.setToolTip("Open ws_demo.html in your browser (pre-filled with this device's port)")
+        self._btn_ws_demo.clicked.connect(self._on_open_ws_demo)
         self._cx_persist = QCheckBox("Persistent virtual grid (auto-attach at startup)")
 
         form.addRow("Prefix", self._ed_prefix)
@@ -93,6 +99,7 @@ class DevicePanel(QWidget):
         form.addRow("", self._cx_ws)
         form.addRow("WebSocket port (0=auto)", self._sp_ws_port)
         form.addRow("", self._lbl_ws_status)
+        form.addRow("", self._btn_ws_demo)
         form.addRow("", self._cx_persist)
 
         btn_row = QHBoxLayout()
@@ -213,8 +220,19 @@ class DevicePanel(QWidget):
         self._lbl_ws_status.setText(
             f"WebSocket: ws://localhost:{ws_port}" if ws_port else ""
         )
+        self._btn_ws_demo.setVisible(bool(ws_port))
+        if ws_port:
+            self._btn_ws_demo.setProperty("ws_port", ws_port)
 
     # ── editor actions ──────────────────────────────────────────────────
+    def _on_open_ws_demo(self) -> None:
+        demo = Path(__file__).parent.parent.parent / "tests" / "ws_demo.html"
+        port = self._btn_ws_demo.property("ws_port") or 0
+        url = QUrl.fromLocalFile(str(demo))
+        if port:
+            url.setQuery(f"port={port}")
+        QDesktopServices.openUrl(url)
+
     def _on_save(self) -> None:
         slot = self._slot
         if slot is None:

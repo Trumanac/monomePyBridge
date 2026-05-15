@@ -147,6 +147,13 @@ class WebSocketBridge:
             pass
         finally:
             self._clients.discard(ws)
+            # When the last client drops, clear all device LEDs so the grid
+            # does not stay frozen in whatever state the client left it in.
+            if not self._clients:
+                try:
+                    self.device.led_all(0)
+                except Exception:
+                    log.debug("led_all(0) on client disconnect failed", exc_info=True)
 
     # ── outbound (called from device threads) ───────────────────────────
     def _broadcast(self, payload: dict) -> None:
