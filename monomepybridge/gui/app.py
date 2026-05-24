@@ -34,7 +34,11 @@ def run_gui(
     qapp.setQuitOnLastWindowClosed(False)
     qapp.setWindowIcon(app_icon())
 
-    log_bridge = install_qt_log_bridge(level=logging.INFO)
+    level_name = (config.log_level or "INFO").upper()
+    bridge_level = getattr(logging, level_name, logging.INFO)
+    if not isinstance(bridge_level, int):
+        bridge_level = logging.INFO
+    log_bridge = install_qt_log_bridge(level=bridge_level)
     qt_bridge = QtBridge(manager)
 
     win = MainWindow(qt_bridge, config, profiles, log_bridge)

@@ -9,6 +9,7 @@ Uses :mod:`platformdirs` so we land in:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from platformdirs import PlatformDirs
@@ -48,3 +49,22 @@ def config_file() -> Path:
 def devices_file() -> Path:
     """Path to the per-device profile store."""
     return config_dir() / "devices.json"
+
+
+def ws_demo_file() -> Path | None:
+    """Return the best available ws_demo.html path for dev and bundled runs."""
+    here = Path(__file__).resolve()
+    candidates = [
+        # Source checkout.
+        here.parents[1] / "tests" / "ws_demo.html",
+        # Editable install / packaged resource within the module tree.
+        here.parent / "resources" / "ws_demo.html",
+    ]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        # PyInstaller extraction root.
+        candidates.append(Path(meipass) / "monomepybridge" / "resources" / "ws_demo.html")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None

@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-    QLineEdit, QProgressBar, QPushButton, QSlider, QSpinBox, QVBoxLayout,
+    QLineEdit, QMessageBox, QProgressBar, QPushButton, QSlider, QSpinBox, QVBoxLayout,
     QWidget,
 )
 
 from ..bridge.devices.virtual import VirtualGridDevice
 from ..config import DeviceProfile, DeviceProfileStore
 from ..osc.protocol import normalize_prefix
+from ..paths import ws_demo_file
 from ..serialosc.manager import BridgeManager, _Slot
 from .grid_widget import GridWidget
 
@@ -226,7 +226,14 @@ class DevicePanel(QWidget):
 
     # ── editor actions ──────────────────────────────────────────────────
     def _on_open_ws_demo(self) -> None:
-        demo = Path(__file__).parent.parent.parent / "tests" / "ws_demo.html"
+        demo = ws_demo_file()
+        if demo is None:
+            QMessageBox.warning(
+                self,
+                "Demo not found",
+                "Could not locate ws_demo.html in the app bundle or source tree.",
+            )
+            return
         port = self._btn_ws_demo.property("ws_port") or 0
         url = QUrl.fromLocalFile(str(demo))
         if port:

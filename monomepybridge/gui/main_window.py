@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..config import AppConfig, DeviceProfileStore
-from ..paths import config_dir
+from ..paths import config_dir, ws_demo_file
 from .device_panel import DevicePanel
 from .icons import app_icon, app_pixmap
 from .log_handler import QtLogBridge
@@ -293,12 +293,13 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(config_dir())))
 
     def _on_open_ws_demo(self) -> None:
-        from pathlib import Path
-        demo = Path(__file__).parent.parent.parent / "tests" / "ws_demo.html"
-        if not demo.exists():
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Demo not found",
-                                f"Could not locate ws_demo.html at:\n{demo}")
+        demo = ws_demo_file()
+        if demo is None:
+            QMessageBox.warning(
+                self,
+                "Demo not found",
+                "Could not locate ws_demo.html in the app bundle or source tree.",
+            )
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(demo)))
 
@@ -356,8 +357,18 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, ev: QCloseEvent) -> None:
         minimize = self._config.minimize_to_tray and self._has_tray
-        if self._allow_close or not minimize:
+        if self._allow_close:
             ev.accept()
+            return
+        if not minimize:
+            # If there is no tray (or tray-minimize is disabled), closing the
+            # main window should terminate the app instead of leaving a hidden
+            # process alive.
+            ev.accept()
+            from PySide6.QtWidgets import QApplication
+            qapp = QApplication.instance()
+            if qapp is not None:
+                qapp.quit()
             return
         ev.ignore()
         self.hide()

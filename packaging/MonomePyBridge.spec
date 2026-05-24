@@ -21,6 +21,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 # ── repo root (spec files run from the repo root) ──────────────────────
 ROOT = Path(SPECPATH).resolve().parent  # noqa: F821 -- SPECPATH provided by PyInstaller
 PKG = ROOT / "monomepybridge"
+_version_ns: dict[str, object] = {}
+exec((PKG / "__init__.py").read_text(encoding="utf-8"), _version_ns)
+APP_VERSION = str(_version_ns.get("__version__", "0.0.0"))
 
 # ── implicit imports PyInstaller can miss ──────────────────────────────
 hiddenimports: list[str] = []
@@ -50,6 +53,8 @@ hiddenimports += [
 datas = []
 # Bundle our resources/ folder (icons, etc.).
 datas += collect_data_files("monomepybridge", includes=["resources/*", "resources/**/*"])
+# Bundle the WebSocket demo into package resources for frozen builds.
+datas += [(str(ROOT / "tests" / "ws_demo.html"), "monomepybridge/resources")]
 
 block_cipher = None
 
@@ -142,8 +147,8 @@ if _is_macos:
         info_plist={
             "CFBundleName": "MonomePyBridge",
             "CFBundleDisplayName": "MonomePyBridge",
-            "CFBundleShortVersionString": "0.6.9.0",
-            "CFBundleVersion": "0.6.9.0",
+            "CFBundleShortVersionString": APP_VERSION,
+            "CFBundleVersion": APP_VERSION,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "10.15",
             "NSMicrophoneUsageDescription": "Not used.",
